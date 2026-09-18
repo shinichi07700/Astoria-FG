@@ -707,12 +707,17 @@ table.editor .del-btn { color: var(--red); border: 0; background: transparent; c
   .env-chip { display: none; }
   .sidenav {
     position: fixed;
-    top: 62px; bottom: 0; left: 0;
+    top: 62px; left: 0;
+    bottom: auto;              /* stop at the last menu item, not the page bottom */
+    height: auto;
+    max-height: calc(100vh - 74px);
     z-index: 60;
     width: 252px;
     transform: translateX(-103%);
     transition: transform .22s ease;
     overflow-y: auto;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0 0 14px 0;
   }
   .sidenav.open { transform: none; box-shadow: 0 18px 44px rgba(64, 64, 65, .28); }
   .shell { display: block; }

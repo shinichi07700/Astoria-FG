@@ -70,6 +70,8 @@ window.ViewsBom = (function () {
       return f.kodeFG + "  -  " + f.deskripsi + (f.status === "Aktif" ? "" : "  [" + f.status + "]");
     }
     var fgPool = db.fgs.filter(function (f) { return f.status === "Aktif"; });
+    /* picker order: Deskripsi Produk A-Z (tie-break kode) */
+    fgPool.sort(Store.fgDescCompare);
     if (!isNew && d.fgId) {
       var curFg = Store.fgById(d.fgId);
       if (curFg && curFg.status !== "Aktif") fgPool = [curFg].concat(fgPool);

@@ -4,17 +4,20 @@
 window.ViewsMaster = (function () {
 
   var CAT_LABEL = { RM: "Raw Material (Formula)", PM: "Packaging (Kemas)", AX: "Auxiliary" };
-  var ROLES = ["RND Formula", "RND Kemas", "Regulatory", "Marketing", "PPIC", "Finance", "QA"];
+  var ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory", "Marketing", "PPIC", "Finance", "QA"];
 
-  /* Master F/G write access belongs to RND Formula, RND Kemas and
-     Regulatory only. Marketing (SO), Finance (copy SKU codes), PPIC and
-     QA (BMR / picking) consume the list read-only. */
-  var FG_EDITOR_ROLES = ["RND Formula", "RND Kemas", "Regulatory"];
+  /* Master F/G write access belongs to Admin plus RND Formula, RND Kemas
+     and Regulatory only. Marketing (SO), Finance (copy SKU codes), PPIC
+     and QA (BMR / picking) consume the list read-only. Admin owns every
+     field (whole master list). */
+  var FG_EDITOR_ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory"];
   /* Field ownership inside the editor - who may input/edit which column:
+     Admin         -> everything
      RND Formula -> FFS code + Deskripsi + Discontinue
      RND Kemas   -> FPS code + Deskripsi + Discontinue
      Regulatory  -> FFS code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
   var FG_FIELD_RIGHTS = {
+    "Admin":       { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true },
     "RND Formula": { ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
     "RND Kemas":   { ffs: false, fps: true, desc: true, na: false, exp: false, disc: true },
     "Regulatory":  { ffs: true, fps: false, desc: true, na: true, exp: true, disc: true }
@@ -190,6 +193,14 @@ window.ViewsMaster = (function () {
 
   /* ---------------- Master F/G ---------------- */
   var fgFilter = { q: "", status: "ALL" };
+  var fgCountEl = null;
+  var FG_CHIPS = [
+    ["ALL", "All status"],
+    ["Aktif", "Aktif"],
+    ["Pending BPOM", "Pending BPOM"],
+    ["Non Aktif", "Non Aktif"],
+    ["DISCONTINUE", "Discontinue"]
+  ];
 
   function fg(root) {
     var db = Store.get();
@@ -201,15 +212,17 @@ window.ViewsMaster = (function () {
     var body = UI.el("div", { class: "card-body tight" });
     search.addEventListener("input", function () { fgFilter.q = search.value; renderFGTable(body); });
     var chips = UI.el("div", { class: "filter-chips" });
-    ["ALL", "Aktif", "Pending BPOM", "Non Aktif"].forEach(function (s) {
+    FG_CHIPS.forEach(function (c) {
       chips.appendChild(UI.el("button", {
-        class: "chip" + (fgFilter.status === s ? " active" : ""), text: s === "ALL" ? "All status" : s,
-        onclick: function () { fgFilter.status = s; App.refresh(); }
+        class: "chip" + (fgFilter.status === c[0] ? " active" : ""), text: c[1],
+        onclick: function () { fgFilter.status = c[0]; App.refresh(); }
       }));
     });
+    /* the SKU counter sits right after the status chips so it reads as part
+       of the selector, not as a far-right page statistic */
+    fgCountEl = UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.fgs.length + " SKU" });
     var card = UI.el("section", { class: "card" });
-    card.appendChild(UI.el("div", { class: "toolbar" }, [search, chips, UI.el("div", { class: "spacer" }),
-      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.fgs.length + " SKU" })]));
+    card.appendChild(UI.el("div", { class: "toolbar" }, [search, chips, fgCountEl]));
     card.appendChild(body);
     root.appendChild(card);
     renderFGTable(body);
@@ -220,10 +233,21 @@ window.ViewsMaster = (function () {
     var db = Store.get();
     var q = fgFilter.q.toLowerCase();
     var rows = db.fgs.filter(function (f) {
-      if (fgFilter.status !== "ALL" && f.status !== fgFilter.status) return false;
+      /* Discontinue shows every flagged row; Non Aktif shows only rows that
+         are inactive for other reasons (discontinued ones have their chip). */
+      if (fgFilter.status === "DISCONTINUE") { if (!f.discontinue) return false; }
+      else if (fgFilter.status === "Non Aktif") { if (f.status !== "Non Aktif" || f.discontinue) return false; }
+      else if (fgFilter.status !== "ALL" && f.status !== fgFilter.status) return false;
       if (!q) return true;
       return (f.kodeFG + " " + f.deskripsi + " " + f.ffs + " " + f.fps + " " + f.kodeNA).toLowerCase().indexOf(q) >= 0;
     });
+    /* most recently updated first (Waktu Update desc) */
+    rows.sort(Store.fgRecentCompare);
+    if (fgCountEl) {
+      fgCountEl.textContent = (fgFilter.status !== "ALL" || q)
+        ? rows.length + " of " + db.fgs.length + " SKU"
+        : db.fgs.length + " SKU";
+    }
     var cols = [
       { label: "Kode Produk Finish Good", render: function (r) {
         return UI.el("div", { style: "display:flex;gap:6px;align-items:center" }, [

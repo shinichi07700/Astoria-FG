@@ -25,10 +25,18 @@ window.App = (function () {
   };
   var current = "dashboard";
 
+  /* Settings & Data (backup import/export, reset, role management) is an
+     Admin-only page. Offline/local mode has no accounts at all - the acting
+     user is the machine owner and this page is the only way to change role or
+     export a backup, so it stays reachable there. */
+  function isAdmin() { return (Store.get().meta.user || {}).role === "Admin"; }
+  function canOpenSettings() { return isAdmin() || !(window.Sync && Sync.enabled()); }
+
   function renderNav() {
     var nav = UI.clear(document.getElementById("sidenav"));
     var lastGroup = null;
     NAV.forEach(function (n) {
+      if (n.id === "settings" && !canOpenSettings()) return;
       if (n.group !== lastGroup) {
         nav.appendChild(UI.el("div", { class: "nav-group-label", text: n.group }));
         lastGroup = n.group;
@@ -43,6 +51,7 @@ window.App = (function () {
   }
 
   function go(id) {
+    if (id === "settings" && !canOpenSettings()) id = "dashboard";
     if (id !== "bom") ViewsBom.resetEditor();
     closeDrawer();
     current = id;
@@ -61,7 +70,9 @@ window.App = (function () {
     var u = Store.get().meta.user;
     var chip = document.getElementById("user-chip");
     chip.textContent = u.name + "  ·  " + u.role;
-    chip.title = (u.email || "no email") + " - click to change acting user";
+    chip.title = canOpenSettings()
+      ? (u.email || "no email") + " - click to open Settings & Data"
+      : (u.email || "no email") + " - signed in as " + u.role;
     var lo = document.getElementById("logout-btn");
     if (lo) lo.hidden = !(window.Sync && Sync.enabled() && window.SB && SB.me());
   }
@@ -84,7 +95,10 @@ window.App = (function () {
   }
 
   function wireChrome() {
-    document.getElementById("user-chip").addEventListener("click", function () { go("settings"); });
+    document.getElementById("user-chip").addEventListener("click", function () {
+      if (canOpenSettings()) go("settings");
+      else UI.toast("Settings & Data is only available to Admin", "err");
+    });
     document.getElementById("logout-btn").addEventListener("click", function () {
       UI.confirmDialog("Sign out of the cloud account? Queued local changes stay on this device.", function () {
         Sync.signOut().then(function () { location.reload(); });

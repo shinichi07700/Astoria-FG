@@ -266,10 +266,39 @@ window.Store = (function () {
     return count;
   }
 
+  /* Master F/G display order: alphabetical by Kode Produk, tie-break on
+     Deskripsi Produk. Used by the CSV export so the shared sheet keeps a
+     stable order no matter how often rows are edited. */
+  function fgCompare(a, b) {
+    return String(a.kodeFG || "").localeCompare(String(b.kodeFG || ""), undefined, { sensitivity: "base" }) ||
+      String(a.deskripsi || "").localeCompare(String(b.deskripsi || ""), undefined, { sensitivity: "base" });
+  }
+
+  /* Waktu Update strings are not zero-padded ("2026-09-07 8:59:49"), so they
+     cannot be compared as text - parse them into a timestamp first. */
+  function waktuVal(s) {
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/.exec(String(s || "").trim());
+    if (!m) return 0;
+    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime();
+  }
+
+  /* Master F/G list order: most recently updated first (Waktu Update desc,
+     tie-break Kode Produk so equal timestamps keep a stable order). */
+  function fgRecentCompare(a, b) {
+    return waktuVal(b.waktuUpdate) - waktuVal(a.waktuUpdate) || fgCompare(a, b);
+  }
+
+  /* Bill of Material Finish Good picker order: Deskripsi Produk A-Z,
+     tie-break Kode Produk. */
+  function fgDescCompare(a, b) {
+    return String(a.deskripsi || "").localeCompare(String(b.deskripsi || ""), undefined, { sensitivity: "base" }) ||
+      String(a.kodeFG || "").localeCompare(String(b.kodeFG || ""), undefined, { sensitivity: "base" });
+  }
+
   function exportMasterCSV() {
     var rows = [["Kode Produk Finish Good", "Deskripsi Produk", "Status F/G", "FFS Formula",
       "FPS Kemas", "Kode NA", "Tgl Expire NA", "Diubah Oleh", "Waktu Update", "Discontinue / Revisi Flag"]];
-    db.fgs.forEach(function (f) {
+    db.fgs.slice().sort(fgCompare).forEach(function (f) {
       rows.push([f.kodeFG, f.deskripsi, f.status, f.ffs, f.fps, f.kodeNA, f.tglExpire,
         f.diubahOleh, f.waktuUpdate, f.discontinue ? "TRUE" : "FALSE"]);
     });
@@ -281,6 +310,7 @@ window.Store = (function () {
     refreshDerived: refreshDerived,
     audit: audit, nextSeq: nextSeq, uid: uid,
     matMap: matMap, fgById: fgById, bomByFg: bomByFg,
+    fgCompare: fgCompare, fgRecentCompare: fgRecentCompare, fgDescCompare: fgDescCompare,
     saveFG: saveFG, deleteFG: deleteFG, reviseFG: reviseFG,
     saveMaterial: saveMaterial, deleteMaterial: deleteMaterial,
     saveBOM: saveBOM, deleteBOM: deleteBOM,

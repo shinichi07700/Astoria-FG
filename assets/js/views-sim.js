@@ -279,6 +279,16 @@ window.ViewsSim = (function () {
   function settings(root) {
     var db = Store.get();
     var cloud = window.Sync && Sync.enabled();
+    /* Admin-only page in cloud mode (also gated in the nav and router):
+       acting user, warning parameters, backups and data reset must never
+       render for other signed-in roles. Offline mode has no accounts, so the
+       page stays reachable there. */
+    if (cloud && (db.meta.user || {}).role !== "Admin") {
+      root.appendChild(UI.pageHead("Settings & Data", "This page is only available to the Admin role.", []));
+      root.appendChild(UI.card("Restricted", null,
+        UI.el("p", { class: "muted", text: "Ask an Admin to change the acting user, parameters, backups or data reset." })));
+      return;
+    }
     root.appendChild(UI.pageHead("Settings & Data",
       cloud
         ? "Signed-in staff account, warning parameters and data management. Supabase is the system of record; this browser keeps a fast working copy."
@@ -303,6 +313,11 @@ window.ViewsSim = (function () {
     var iName = UI.input({ value: db.meta.user.name });
     var iEmail = UI.input({ value: db.meta.user.email });
     var iRole = UI.select(ViewsMaster.ROLES.map(function (r) { return [r, r]; }), db.meta.user.role);
+    /* Role management belongs to Admin: in cloud mode an editable select
+       here would let any signed-in user self-assign a higher role (the
+       value is synced to their cloud profile on save). */
+    var roleLocked = !!cloud && db.meta.user.role !== "Admin";
+    if (roleLocked) { iRole.disabled = true; iRole.title = "Only Admin can change roles"; }
     var iWarn = UI.input({ type: "number", step: "1", min: "1", value: String(db.meta.expWarnDays || 90) });
     root.appendChild(UI.card("Acting user & parameters", [
       UI.btn("Save settings", function () {
@@ -330,7 +345,7 @@ window.ViewsSim = (function () {
     ], UI.el("div", { class: "form-grid" }, [
       UI.field("Name", iName),
       UI.field("Email", iEmail),
-      UI.field("Role", iRole, "v1 has no login - the role labels audit entries and groups form fields."),
+      UI.field("Role", iRole, roleLocked ? "Only Admin can change roles." : "The role labels audit entries and controls which master-data fields you can edit."),
       UI.field("NA expiry warning window (days)", iWarn)
     ])));
 
