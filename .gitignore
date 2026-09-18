@@ -1,0 +1,15 @@
+# --- sensitive / local-only files, not for the repo ---
+# Ops scripts embed test-account credentials (password grant)
+/supabase/*.ps1
+# Real production Master F/G data exported from the company Google Sheet
+/data/*.csv
+
+# --- throwaway browser-verification screenshots (root level) ---
+/*.png
+
+# --- OS / sync noise (workspace lives in Google Drive) ---
+Thumbs.db
+Desktop.ini
+desktop.ini
+.DS_Store
+*.log

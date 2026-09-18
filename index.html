@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PT Astoria Prima - F/G Master &amp; BOM Suite</title>
+<link rel="icon" type="image/png" href="assets/img/logo.png">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu">&#8801;</button>
+  <div class="brand">
+    <img class="brand-logo" src="assets/img/logo.png" alt="PT Astoria Prima - Cosmetic Manufacture">
+  </div>
+  <div class="topbar-right">
+    <span class="env-chip">Local data &middot; browser storage</span>
+    <button class="env-chip sync-chip" id="sync-chip" hidden title="Cloud sync status - click to sync now"></button>
+    <span id="user-chip" class="user-chip"></span>
+    <button class="btn-logout" id="logout-btn" type="button" title="Sign out of the cloud account" hidden>Sign out</button>
+  </div>
+</header>
+<div class="nav-backdrop" id="nav-backdrop"></div>
+
+<div class="shell">
+  <nav class="sidenav" id="sidenav"></nav>
+  <main class="view" id="view"></main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<div id="print-area"></div>
+
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/engine.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/supabase-config.js"></script>
+<script src="assets/js/sb.js"></script>
+<script src="assets/js/sync.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/views-master.js"></script>
+<script src="assets/js/views-bom.js"></script>
+<script src="assets/js/views-sim.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
