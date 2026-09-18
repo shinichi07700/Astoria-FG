@@ -7,12 +7,21 @@ window.ViewsMaster = (function () {
   var ROLES = ["RND Formula", "RND Kemas", "Regulatory", "Marketing", "PPIC", "Finance", "QA"];
 
   /* Master F/G write access belongs to RND Formula, RND Kemas and
-     Regulatory. Marketing (SO), Finance (copy SKU codes), PPIC and QA
-     (BMR / picking) consume the list read-only. */
-  var FG_VIEWER_ROLES = ["Marketing", "Finance", "PPIC", "QA"];
+     Regulatory only. Marketing (SO), Finance (copy SKU codes), PPIC and
+     QA (BMR / picking) consume the list read-only. */
+  var FG_EDITOR_ROLES = ["RND Formula", "RND Kemas", "Regulatory"];
+  /* Field ownership inside the editor - who may input/edit which column:
+     RND Formula -> FFS code + Deskripsi + Discontinue
+     RND Kemas   -> FPS code + Deskripsi + Discontinue
+     Regulatory  -> FFS code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
+  var FG_FIELD_RIGHTS = {
+    "RND Formula": { ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
+    "RND Kemas":   { ffs: false, fps: true, desc: true, na: false, exp: false, disc: true },
+    "Regulatory":  { ffs: true, fps: false, desc: true, na: true, exp: true, disc: true }
+  };
   function canEditFG() {
     var u = Store.get().meta.user || {};
-    return FG_VIEWER_ROLES.indexOf(u.role) < 0;
+    return FG_EDITOR_ROLES.indexOf(u.role) >= 0;
   }
 
   /* ---------------- Dashboard ---------------- */
@@ -239,6 +248,7 @@ window.ViewsMaster = (function () {
     if (canEditFG()) cols.push({ label: "", render: function (r) {
         return UI.el("div", { class: "btn-row" }, [
           UI.btn("Edit", function () { fgEditor(r); }, "btn-sm"),
+          UI.btn("Revision", function () { fgRevision(r); }, "btn-sm"),
           UI.btn("Delete", function () {
             UI.confirmDialog("Delete F/G " + r.kodeFG + "? BOMs referencing it will keep a dangling reference.", function () {
               Store.deleteFG(r.id); App.refresh();
@@ -277,20 +287,40 @@ window.ViewsMaster = (function () {
         preview();
       });
     });
-    var disc = UI.checkRow("Discontinue / superseded revision (Column J flag -> forces status Non Aktif)", d.discontinue, function (v) { d.discontinue = v; preview(); });
+    var disc = UI.checkRow("Discontinue / superseded revision (forces status Non Aktif)", d.discontinue, function (v) { d.discontinue = v; preview(); });
+
+    /* Field-level rights: fields this role does not own become read-only
+       (grey styling) with a tooltip naming the owning department; the
+       Discontinue checkbox is disabled instead (readonly n/a to boxes). */
+    var role = (Store.get().meta.user || {}).role;
+    var rights = FG_FIELD_RIGHTS[role] || { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true };
+    function lockField(inp, editable, who) {
+      if (!editable) {
+        inp.readOnly = true;
+        inp.title = "Locked for " + role + " - " + who;
+      }
+    }
+    lockField(iFfs, rights.ffs, "RND Formula / Regulatory own the formula code");
+    lockField(iFps, rights.fps, "RND Kemas owns the kemas code");
+    lockField(iDesc, rights.desc, "owned by the master-data roles");
+    lockField(iNa, rights.na, "Regulatory owns Kode NA");
+    lockField(iExp, rights.exp, "Regulatory owns the NA expiry date");
+    var discCb = disc.querySelector("input");
+    if (discCb && !rights.disc) { discCb.disabled = true; discCb.title = "Locked for " + role; }
+    function lk(editable) { return editable ? "" : " Locked for your role."; }
 
     var body = UI.el("div", {}, [
       UI.el("div", { class: "preview-box" }, [
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "Kode Produk F/G (auto)" }), pvKode]),
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "Status F/G (auto)" }), pvStatus])
       ]),
-      fieldset("RND Formula", [UI.field("FFS Formula code", iFfs, "Initial formula code input by RND formula team; corrected after BPOM approval.")]),
-      fieldset("RND Kemas", [UI.field("FPS Kemas code", iFps, "Packaging code input by RND Kemas team.")]),
+      fieldset("RND Formula", [UI.field("FFS Formula code", iFfs, "Initial formula code input by RND formula team; corrected after BPOM approval." + lk(rights.ffs))]),
+      fieldset("RND Kemas", [UI.field("FPS Kemas code", iFps, "Packaging code input by RND Kemas team." + lk(rights.fps))]),
       fieldset("Regulatory", [
-        UI.field("Deskripsi Produk", iDesc),
+        UI.field("Deskripsi Produk", iDesc, rights.desc ? null : "Locked for your role."),
         UI.el("div", { class: "form-grid" }, [
-          UI.field("Kode NA (BPOM)", iNa, "Leave empty while registration is in progress -> status Pending BPOM."),
-          UI.field("Tgl Expire NA", iExp, "Passed date -> status flips to Non Aktif on next refresh.")
+          UI.field("Kode NA (BPOM)", iNa, (rights.na ? "Leave empty while registration is in progress -> status Pending BPOM." : "") + lk(rights.na)),
+          UI.field("Tgl Expire NA", iExp, (rights.exp ? "Passed date -> status flips to Non Aktif on next refresh." : "") + lk(rights.exp))
         ])
       ]),
       disc
@@ -318,6 +348,53 @@ window.ViewsMaster = (function () {
   }
   function fieldset(legend, kids) {
     return UI.el("fieldset", { class: "role-group" }, [UI.el("legend", { text: legend })].concat(kids));
+  }
+
+  /* ---------------- Revision workflow ----------------
+     Formula / kemas code revised for the same product: instead of the
+     user re-typing a whole new SKU, one dialog supersedes the old row
+     (auto Discontinue -> Non Aktif) and creates the new revision with
+     Kode NA / Tgl Expire NA cleared (BPOM recertification) -> Pending BPOM. */
+  function fgRevision(rec) {
+    var role = (Store.get().meta.user || {}).role;
+    var rights = FG_FIELD_RIGHTS[role] || { ffs: true, fps: true };
+    var iFfs = UI.input({ class: "input mono", value: rec.ffs, placeholder: "e.g. TO01MR03" });
+    var iFps = UI.input({ class: "input mono", value: rec.fps, placeholder: "e.g. 100200100" });
+    if (!rights.ffs) { iFfs.readOnly = true; iFfs.title = "Locked for " + role; }
+    if (!rights.fps) { iFps.readOnly = true; iFps.title = "Locked for " + role; }
+    var body = UI.el("div", {}, [
+      UI.el("div", { class: "preview-box", style: "margin-bottom:12px" }, [
+        UI.el("div", { style: "font-size:12.5px;line-height:1.7" }, [
+          UI.el("div", { html: "Current SKU <span class='mono' style='font-weight:700'>" + Engine.esc(rec.kodeFG) +
+            "</span> will be marked <b>Discontinue</b> (status Non Aktif) as superseded." }),
+          UI.el("div", { html: "The new revision keeps the same Deskripsi Produk but starts <b>without Kode NA and Tgl Expire NA</b> (BPOM recertification required) &rarr; status Pending BPOM." }),
+          UI.el("div", { html: "BOMs referencing the old SKU keep their reference; build a new BOM for the revision when ready." })
+        ])
+      ]),
+      UI.el("div", { class: "form-grid" }, [
+        UI.field("New FFS Formula code", iFfs, rights.ffs ? "Change this when the formula (bulk) is revised." : "Locked for your role."),
+        UI.field("New FPS Kemas code", iFps, rights.fps ? "Change this when the packaging is revised." : "Locked for your role.")
+      ])
+    ]);
+    UI.modal({
+      title: "New revision - " + rec.kodeFG,
+      body: body,
+      actions: [{
+        label: "Create revision", cls: "btn-primary", onClick: function () {
+          var ffs = iFfs.value.trim(), fps = iFps.value.trim();
+          if (!ffs && !fps) { UI.toast("FFS Formula or FPS Kemas is required", "err"); return; }
+          if (ffs === rec.ffs && fps === rec.fps) { UI.toast("Change at least one code to create a revision", "err"); return; }
+          var id = ffs + "|" + fps;
+          if (Store.fgById(id)) { UI.toast("SKU already exists: " + Engine.kodeFG(ffs, fps), "err"); return; }
+          UI.closeModal();
+          var nu = Store.reviseFG(rec.id, ffs, fps);
+          if (nu) {
+            UI.toast("Revision " + nu.kodeFG + " created - " + rec.kodeFG + " discontinued (Pending BPOM until recertified)", "ok");
+            App.refresh();
+          }
+        }
+      }]
+    });
   }
 
   /* ---------------- Master Material ---------------- */

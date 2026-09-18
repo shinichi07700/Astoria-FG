@@ -116,6 +116,25 @@ window.Store = (function () {
     if (window.Sync) Sync.mark("fg_master", id, "delete");
     save();
   }
+  /* Revision workflow: formula / kemas code revised for the same product.
+     The old SKU is superseded (Discontinue -> status Non Aktif) and a new
+     SKU is created carrying the same deskripsi but WITHOUT Kode NA /
+     Tgl Expire NA (BPOM recertification required) -> status Pending BPOM. */
+  function reviseFG(oldId, newFfs, newFps) {
+    var old = fgById(oldId);
+    if (!old) return null;
+    var rec = JSON.parse(JSON.stringify(old));
+    rec.ffs = newFfs; rec.fps = newFps;
+    rec.id = newFfs + "|" + newFps;
+    rec.kodeNA = ""; rec.tglExpire = ""; rec.discontinue = false;
+    old.discontinue = true;
+    saveFG(old, false, oldId);
+    saveFG(rec, true, null);
+    audit("REVISION", "Master F/G",
+      old.kodeFG + " superseded by " + rec.kodeFG + " (" + rec.deskripsi + ") - NA cleared for BPOM recertification");
+    save();
+    return rec;
+  }
 
   /* ---------- Master Material CRUD ---------- */
   function saveMaterial(rec, isNew, oldCode) {
@@ -262,7 +281,7 @@ window.Store = (function () {
     refreshDerived: refreshDerived,
     audit: audit, nextSeq: nextSeq, uid: uid,
     matMap: matMap, fgById: fgById, bomByFg: bomByFg,
-    saveFG: saveFG, deleteFG: deleteFG,
+    saveFG: saveFG, deleteFG: deleteFG, reviseFG: reviseFG,
     saveMaterial: saveMaterial, deleteMaterial: deleteMaterial,
     saveBOM: saveBOM, deleteBOM: deleteBOM,
     saveSim: saveSim, saveRequest: saveRequest,
