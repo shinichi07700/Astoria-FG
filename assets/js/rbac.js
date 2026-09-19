@@ -37,6 +37,13 @@ window.RBAC = (function () {
     mixers: ["PPIC", "Production"]
   };
 
+  /* Sales Orders (FR-MK-03) are created / edited by Marketing; the status
+     transitions (Confirm = Marketing, Close = PPIC) live in STATES below.
+     The PPIC netting run (writes PR / call-off / campaign WO) is a PPIC
+     action. Admin may do both. */
+  var SO_EDITORS = ["Marketing"];
+  var PPIC_PLANNERS = ["PPIC"];
+
   /* ---------- state machine ----------
      statuses      : the only legal values of the document status
      transitions   : allowed hops with the roles that may sign them off
@@ -129,6 +136,8 @@ window.RBAC = (function () {
     var list = MASTER_EDITORS[which] || [];
     return list.indexOf(role()) >= 0;
   }
+  function canEditSO() { return isAdmin() || SO_EDITORS.indexOf(role()) >= 0; }
+  function canPlan() { return isAdmin() || PPIC_PLANNERS.indexOf(role()) >= 0; }
   function canTransition(entity, from, to) {
     var e = STATES[entity];
     if (!e) return false;
@@ -149,10 +158,10 @@ window.RBAC = (function () {
 
   return {
     ROLES: ROLES, FG_EDITOR_ROLES: FG_EDITOR_ROLES, FG_FIELD_RIGHTS: FG_FIELD_RIGHTS,
-    MASTER_EDITORS: MASTER_EDITORS, STATES: STATES,
+    MASTER_EDITORS: MASTER_EDITORS, SO_EDITORS: SO_EDITORS, PPIC_PLANNERS: PPIC_PLANNERS, STATES: STATES,
     SETTINGS_ADMIN_ONLY_IN_CLOUD: SETTINGS_ADMIN_ONLY_IN_CLOUD,
     role: role, isAdmin: isAdmin, canEditFG: canEditFG, fgRights: fgRights,
-    canEditMaster: canEditMaster, canTransition: canTransition,
+    canEditMaster: canEditMaster, canEditSO: canEditSO, canPlan: canPlan, canTransition: canTransition,
     transitionsFrom: transitionsFrom, lockedGroups: lockedGroups
   };
 })();

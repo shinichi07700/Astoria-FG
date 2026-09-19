@@ -187,6 +187,73 @@ window.Sync = (function () {
   function simFrom(r) { return r.payload; }
   function reqRow(r) { return { id: r.id, type: r.type, no_doc: r.noDoc, payload: r }; }
   function reqFrom(r) { return r.payload; }
+  /* ---- Phase 2 transaction tables (migration 003, v:3) ---- */
+  function soRow(s) {
+    return {
+      id: s.id, no_so: s.noSo || "", customer_id: s.customerId || null, fg_id: s.fgId || null,
+      kode_barang: s.kodeBarang || "", netto_per_unit: Number(s.nettoPerUnit) || 0,
+      order_qty: Number(s.orderQty) || 0, delivery_date: s.deliveryDate || null,
+      status: s.status || "Draft", note: s.note || "", created_by: s.createdBy || ""
+    };
+  }
+  function soFrom(r) {
+    return {
+      id: r.id, noSo: r.no_so || "", customerId: r.customer_id || "", fgId: r.fg_id || "",
+      kodeBarang: r.kode_barang || "", nettoPerUnit: Number(r.netto_per_unit) || 0,
+      orderQty: Number(r.order_qty) || 0, deliveryDate: r.delivery_date || "",
+      status: r.status || "Draft", note: r.note || "", createdBy: r.created_by || ""
+    };
+  }
+  function prRow(p) {
+    return {
+      id: p.id, req_no: p.reqNo || "", so_id: p.soId || null, fg_id: p.fgId || null,
+      material_code: p.materialCode || "", material_name: p.materialName || "",
+      qty: Number(p.qty) || 0, net_qty: Number(p.netQty) || 0, unit: p.unit || "",
+      moq: Number(p.moq) || 0, supplier: p.supplier || "",
+      required_by: p.requiredBy || null, status: p.status || "Open"
+    };
+  }
+  function prFrom(r) {
+    return {
+      id: r.id, reqNo: r.req_no || "", soId: r.so_id || "", fgId: r.fg_id || "",
+      materialCode: r.material_code || "", materialName: r.material_name || "",
+      qty: Number(r.qty) || 0, netQty: Number(r.net_qty) || 0, unit: r.unit || "",
+      moq: Number(r.moq) || 0, supplier: r.supplier || "",
+      requiredBy: r.required_by || "", status: r.status || "Open"
+    };
+  }
+  function coRow(c) {
+    return {
+      id: c.id, call_off_no: c.callOffNo || "", so_id: c.soId || null, fg_id: c.fgId || null,
+      customer_id: c.customerId || null, material_code: c.materialCode || "",
+      material_name: c.materialName || "", qty: Number(c.qty) || 0, unit: c.unit || "",
+      required_by: c.requiredBy || null, status: c.status || "Open"
+    };
+  }
+  function coFrom(r) {
+    return {
+      id: r.id, callOffNo: r.call_off_no || "", soId: r.so_id || "", fgId: r.fg_id || "",
+      customerId: r.customer_id || "", materialCode: r.material_code || "",
+      materialName: r.material_name || "", qty: Number(r.qty) || 0, unit: r.unit || "",
+      requiredBy: r.required_by || "", status: r.status || "Open"
+    };
+  }
+  function woRow(w) {
+    return {
+      id: w.id, wo_no: w.woNo || "", campaign_no: w.campaignNo || "", so_id: w.soId || null,
+      fg_id: w.fgId || null, bulk_code: w.bulkCode || "", mixer_id: w.mixerId || null,
+      batch_seq: Number(w.batchSeq) || 1, planned_kg: Number(w.plannedKg) || 0,
+      status: w.status || "Planned"
+    };
+  }
+  function woFrom(r) {
+    return {
+      id: r.id, woNo: r.wo_no || "", campaignNo: r.campaign_no || "", soId: r.so_id || "",
+      fgId: r.fg_id || "", bulkCode: r.bulk_code || "", mixerId: r.mixer_id || "",
+      batchSeq: Number(r.batch_seq) || 1, plannedKg: Number(r.planned_kg) || 0,
+      status: r.status || "Planned"
+    };
+  }
 
   /* ---------- table registry ----------
      v = migration that introduced the table (v > 1 may be absent).
@@ -212,7 +279,12 @@ window.Sync = (function () {
         db.boms.forEach(function (b) { b.items = byBom[b.id] || []; });
       } },
     { name: "sims", pk: "id", key: "id", store: "sims", v: 1, order: "created_at.desc", row: simRow, from: simFrom },
-    { name: "requests", pk: "id", key: "id", store: "requests", v: 1, order: "created_at.desc", row: reqRow, from: reqFrom }
+    { name: "requests", pk: "id", key: "id", store: "requests", v: 1, order: "created_at.desc", row: reqRow, from: reqFrom },
+    /* migration 003 - parents before dependents so FK targets upsert first */
+    { name: "t_sales_order", pk: "id", key: "id", store: "salesOrders", v: 3, order: "created_at.desc", row: soRow, from: soFrom },
+    { name: "t_purchase_req", pk: "id", key: "id", store: "purchaseReqs", v: 3, order: "created_at.desc", row: prRow, from: prFrom },
+    { name: "t_calloff", pk: "id", key: "id", store: "calloffs", v: 3, order: "created_at.desc", row: coRow, from: coFrom },
+    { name: "t_work_order_bulk", pk: "id", key: "id", store: "workOrdersBulk", v: 3, order: "created_at.desc", row: woRow, from: woFrom }
   ];
   /* append-only / single-row tables stay hand-coded */
   var EXTRAS = [

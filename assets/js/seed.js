@@ -111,6 +111,13 @@ window.Seed = (function () {
     ]
   }];
 
+  /* Mixer catalogue (PPIC lot sizing) - mirrors the migration 002 seed. */
+  var mixers = [
+    { id: "MX-HIMIX1000", name: "Himix 1,000 kg", vessel: "Himix", capacityKg: 1000, active: true },
+    { id: "MX-DJK500", name: "Double jacket kettle 500 kg", vessel: "Double jacket kettle", capacityKg: 500, active: true },
+    { id: "MX-DJK200", name: "Double jacket kettle 200 kg", vessel: "Double jacket kettle", capacityKg: 200, active: true }
+  ];
+
   function build() {
     return JSON.parse(JSON.stringify({
       meta: {
@@ -124,6 +131,9 @@ window.Seed = (function () {
       materials: materials,
       fgs: fgs,
       boms: boms,
+      /* Mixer catalogue mirrors the migration 002 seed so the PPIC lot plan
+         sizes identically offline and in the cloud. */
+      mixers: mixers,
       sims: [],
       requests: [],
       audit: [{

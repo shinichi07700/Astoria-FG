@@ -7,7 +7,7 @@ window.Store = (function () {
   var KEY = "astoria_fg_suite_v1";
   var db = null;
   /* document sequences used across the pipeline (FR-xx numbering) */
-  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj"];
+  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign"];
   function fixSeq() {
     db.meta.seq = db.meta.seq || {};
     SEQ_KEYS.forEach(function (k) { if (db.meta.seq[k] == null) db.meta.seq[k] = 0; });
@@ -17,6 +17,10 @@ window.Store = (function () {
     db.formulas = db.formulas || [];
     db.packagings = db.packagings || [];
     db.mixers = db.mixers || [];
+    db.salesOrders = db.salesOrders || [];
+    db.purchaseReqs = db.purchaseReqs || [];
+    db.calloffs = db.calloffs || [];
+    db.workOrdersBulk = db.workOrdersBulk || [];
     db.sims = db.sims || [];
     db.requests = db.requests || [];
     db.audit = db.audit || [];
@@ -289,6 +293,137 @@ window.Store = (function () {
     save();
   }
 
+  /* ---------- Sales Order CRUD (FR-MK-03) ----------
+     Marketing creates a Draft; Confirm locks the commercial fields and
+     Close is signed by PPIC once the demand is fulfilled. The status
+     machine itself lives in rbac.js (salesOrder) so the UI, this store
+     and the Phase 6 RLS policies all read the same transitions. */
+  function soById(id) {
+    return db.salesOrders.filter(function (x) { return String(x.id) === String(id); })[0] || null;
+  }
+  function saveSalesOrder(rec, isNew, oldId) {
+    replaceRow(db.salesOrders, "id", oldId || rec.id, rec, false);
+    var fg = fgById(rec.fgId);
+    audit(isNew ? "CREATE" : "UPDATE", "Sales Order",
+      rec.noSo + " - " + (fg ? fg.kodeFG : rec.fgId) + " x " + Engine.fmtNum(rec.orderQty, 0) +
+      " pcs, delivery " + (rec.deliveryDate || "-") + " [" + rec.status + "]");
+    if (window.Sync) {
+      if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_sales_order", oldId, "delete");
+      Sync.mark("t_sales_order", rec.id);
+    }
+    save();
+    return rec;
+  }
+  /* Status transition re-validated against the rbac.js state machine (the
+     view only renders the allowed hops; this is the second line of defence). */
+  function transitionSO(id, to) {
+    var so = soById(id);
+    if (!so) return false;
+    var ok = window.RBAC ? RBAC.canTransition("salesOrder", so.status, to) : false;
+    if (!ok) {
+      audit("DENY", "Sales Order", so.noSo + " - " + so.status + " \u2192 " + to +
+        " not allowed for " + (db.meta.user.role || "role"));
+      save();
+      return false;
+    }
+    var from = so.status;
+    so.status = to;
+    audit("TRANSITION", "Sales Order", so.noSo + " - " + from + " \u2192 " + to);
+    if (window.Sync) Sync.mark("t_sales_order", so.id);
+    save();
+    return true;
+  }
+  function deleteSalesOrder(id) {
+    var so = soById(id);
+    db.salesOrders = db.salesOrders.filter(function (x) { return String(x.id) !== String(id); });
+    if (so) audit("DELETE", "Sales Order", so.noSo);
+    if (window.Sync) Sync.mark("t_sales_order", id, "delete");
+    save();
+  }
+
+  /* ---------- PPIC netting output (FR-PP-11 + call-off + campaign WO) ----------
+     One PPIC "run" against a sales order writes three linked row sets:
+     purchase requisition lines (Astoria shortfalls, MOQ-rounded), call-off
+     lines (customer-supplied components) and the mixer-sized bulk batches
+     that form the parent campaign work order. Re-running an order supersedes
+     the previous Open/Planned rows for the same SO so a re-plan never leaves
+     stale duplicates; rows already progressed are left untouched. */
+  function savePpicRun(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var soId = inp.soId || "";
+
+    /* supersede a previous still-open plan for the same SO */
+    var purged = 0;
+    if (soId) {
+      db.purchaseReqs = db.purchaseReqs.filter(function (r) {
+        if (r.soId === soId && r.status === "Open") { if (window.Sync) Sync.mark("t_purchase_req", r.id, "delete"); purged++; return false; }
+        return true;
+      });
+      db.calloffs = db.calloffs.filter(function (r) {
+        if (r.soId === soId && r.status === "Open") { if (window.Sync) Sync.mark("t_calloff", r.id, "delete"); purged++; return false; }
+        return true;
+      });
+      db.workOrdersBulk = db.workOrdersBulk.filter(function (r) {
+        if (r.soId === soId && r.status === "Planned") { if (window.Sync) Sync.mark("t_work_order_bulk", r.id, "delete"); purged++; return false; }
+        return true;
+      });
+    }
+
+    var mm = matMap();
+    var reqNo = "", callOffNo = "", campaignNo = "";
+    var prCount = 0, coCount = 0, woCount = 0;
+
+    (inp.prLines || []).forEach(function (l) {
+      if (!reqNo) reqNo = Engine.noRequest("PR", nextSeq("pr"), date);
+      var m = mm[l.materialCode] || {};
+      var rec = {
+        id: uid("PR"), reqNo: reqNo, soId: soId, fgId: inp.fgId || "",
+        materialCode: l.materialCode, materialName: l.name || m.name || "",
+        qty: l.orderQty, netQty: l.net, unit: l.unit || m.unit || "", moq: l.moq || 0,
+        supplier: m.supplier || "", requiredBy: l.requiredBy || "", status: "Open"
+      };
+      db.purchaseReqs.unshift(rec);
+      if (window.Sync) Sync.mark("t_purchase_req", rec.id);
+      prCount++;
+    });
+
+    (inp.calloffLines || []).forEach(function (l) {
+      if (!callOffNo) callOffNo = "CO/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("calloff"), 3);
+      var rec = {
+        id: uid("CO"), callOffNo: callOffNo, soId: soId, fgId: inp.fgId || "",
+        customerId: inp.customerId || "", materialCode: l.materialCode, materialName: l.name || "",
+        qty: l.qty, unit: l.unit || "", requiredBy: l.requiredBy || "", status: "Open"
+      };
+      db.calloffs.unshift(rec);
+      if (window.Sync) Sync.mark("t_calloff", rec.id);
+      coCount++;
+    });
+
+    (inp.batches || []).forEach(function (b, i) {
+      if (!campaignNo) campaignNo = "CAMP/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("campaign"), 3);
+      var rec = {
+        id: uid("WO"), woNo: Engine.noRequest("WO", nextSeq("wo"), date), campaignNo: campaignNo,
+        soId: soId, fgId: inp.fgId || "", bulkCode: inp.bulkCode || "",
+        mixerId: b.mixerId || "", batchSeq: i + 1, plannedKg: b.plannedKg || 0, status: "Planned"
+      };
+      db.workOrdersBulk.unshift(rec);
+      if (window.Sync) Sync.mark("t_work_order_bulk", rec.id);
+      woCount++;
+    });
+
+    var fg = fgById(inp.fgId);
+    audit("CREATE", "PPIC Netting",
+      (inp.noSo ? inp.noSo + " - " : "") + (fg ? fg.kodeFG : inp.fgId) +
+      ": " + prCount + " PR line(s)" + (reqNo ? " [" + reqNo + "]" : "") +
+      ", " + coCount + " call-off(s)" + (callOffNo ? " [" + callOffNo + "]" : "") +
+      ", " + woCount + " bulk batch(es)" + (campaignNo ? " [" + campaignNo + "]" : "") +
+      (purged ? "; superseded " + purged + " prior row(s)" : ""));
+    save();
+    return { reqNo: reqNo, callOffNo: callOffNo, campaignNo: campaignNo,
+      prCount: prCount, calloffCount: coCount, woCount: woCount, purged: purged };
+  }
+
   /* ---------- Simulation & requests ---------- */
   function saveSim(rec) {
     db.sims.unshift(rec);
@@ -427,6 +562,8 @@ window.Store = (function () {
     savePackaging: savePackaging, deletePackaging: deletePackaging, packagingById: packagingById,
     saveMixer: saveMixer, deleteMixer: deleteMixer, mixerById: mixerById,
     saveBOM: saveBOM, deleteBOM: deleteBOM,
+    soById: soById, saveSalesOrder: saveSalesOrder, transitionSO: transitionSO, deleteSalesOrder: deleteSalesOrder,
+    savePpicRun: savePpicRun,
     saveSim: saveSim, saveRequest: saveRequest,
     exportJSON: exportJSON, importJSON: importJSON, resetToSample: resetToSample,
     importMasterCSV: importMasterCSV, exportMasterCSV: exportMasterCSV

@@ -10,7 +10,9 @@ window.App = (function () {
     { id: "customers", label: "Master Customer", group: "Master Data" },
     { id: "formulas", label: "Master Formula", group: "Master Data" },
     { id: "packagings", label: "Master Packaging", group: "Master Data" },
+    { id: "so", label: "Sales Order", group: "Sales" },
     { id: "bom", label: "Bill of Material", group: "PPIC" },
+    { id: "ppic", label: "PPIC Netting", group: "PPIC" },
     { id: "sim", label: "Order Simulation", group: "PPIC" },
     { id: "requests", label: "MR / PR Documents", group: "PPIC" },
     { id: "audit", label: "Audit Log", group: "Control" },
@@ -23,7 +25,9 @@ window.App = (function () {
     customers: function (r) { ViewsMaster.customers(r); },
     formulas: function (r) { ViewsMaster.formulas(r); },
     packagings: function (r) { ViewsMaster.packagings(r); },
+    so: function (r) { ViewsSO.list(r); },
     bom: function (r) { ViewsBom.list(r); },
+    ppic: function (r) { ViewsPpic.netting(r); },
     sim: function (r) { ViewsSim.sim(r); },
     requests: function (r) { ViewsSim.requests(r); },
     audit: function (r) { ViewsSim.audit(r); },
@@ -152,7 +156,7 @@ window.App = (function () {
     };
     chip.textContent = labels[s] || "Cloud";
     chip.title = miss.length
-      ? "Waiting for supabase/migrations/002_pipeline_foundation.sql (missing: " + miss.join(", ") + ")"
+      ? "Cloud schema is behind - run the pending files in supabase/migrations (002, 003). Missing: " + miss.join(", ")
       : "";
     chip.dataset.s = s;
   }
