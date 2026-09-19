@@ -4,28 +4,12 @@
 window.ViewsMaster = (function () {
 
   var CAT_LABEL = { RM: "Raw Material (Formula)", PM: "Packaging (Kemas)", AX: "Auxiliary" };
-  var ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory", "Marketing", "PPIC", "Finance", "QA"];
-
-  /* Master F/G write access belongs to Admin plus RND Formula, RND Kemas
-     and Regulatory only. Marketing (SO), Finance (copy SKU codes), PPIC
-     and QA (BMR / picking) consume the list read-only. Admin owns every
-     field (whole master list). */
-  var FG_EDITOR_ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory"];
-  /* Field ownership inside the editor - who may input/edit which column:
-     Admin         -> everything
-     RND Formula -> FFS code + Deskripsi + Discontinue
-     RND Kemas   -> FPS code + Deskripsi + Discontinue
-     Regulatory  -> FFS code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
-  var FG_FIELD_RIGHTS = {
-    "Admin":       { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true },
-    "RND Formula": { ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
-    "RND Kemas":   { ffs: false, fps: true, desc: true, na: false, exp: false, disc: true },
-    "Regulatory":  { ffs: true, fps: false, desc: true, na: true, exp: true, disc: true }
-  };
-  function canEditFG() {
-    var u = Store.get().meta.user || {};
-    return FG_EDITOR_ROLES.indexOf(u.role) >= 0;
-  }
+  /* Roles, F/G field ownership, master ownership and the document state
+     machine live in rbac.js - one source of truth shared by every view
+     (and later by the RLS policy generator). Aliased here for brevity. */
+  var ROLES = RBAC.ROLES;
+  var FG_FIELD_RIGHTS = RBAC.FG_FIELD_RIGHTS;
+  function canEditFG() { return RBAC.canEditFG(); }
 
   /* ---------------- Dashboard ---------------- */
   var STATUS_COLORS = { "Aktif": "#9fe8c7", "Pending BPOM": "#ffd98a", "Non Aktif": "#ffc2c6" };

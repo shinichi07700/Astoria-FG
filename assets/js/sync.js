@@ -5,6 +5,12 @@
    cloud, every local change is marked dirty and pushed back
    (debounced). Offline changes stay queued and flush when the
    connection returns.
+
+   Tables are described once in the TABLES registry below; hydrate
+   and flush are generic over it, so adding an entity is a one-line
+   registry entry plus row mappers. Tables introduced by a later
+   migration (v > 1) may be absent on the cloud: they are tolerated
+   (kept local-only, marks stay queued) until the migration runs.
    ============================================================ */
 window.Sync = (function () {
   var PKEY = "astoria_sync_pending";
@@ -18,6 +24,7 @@ window.Sync = (function () {
   var localRowsBefore = 0;   // local rows present before first cloud hydrate
   var lastCloudEmpty = false;
   var localSnapshot = null;  // deep copy of local store taken before hydrate
+  var missing = {};          // cloud tables absent until a migration is run
 
   function enabled() {
     return !!(window.ASTORIA_SUPABASE && window.ASTORIA_SUPABASE.url && window.ASTORIA_SUPABASE.anonKey);
@@ -29,6 +36,7 @@ window.Sync = (function () {
     listeners.forEach(function (fn) { fn(s); });
   }
   function pendingCount() { return Object.keys(pending).length + auditQueue + (replaceAll ? 1 : 0); }
+  function missingTables() { return Object.keys(missing); }
 
   /* ---------- dirty tracking ---------- */
   function loadPending() {
@@ -71,13 +79,70 @@ window.Sync = (function () {
   function matRow(m) {
     return {
       code: m.code, name: m.name, category: m.category, unit: m.unit,
-      stock_qty: Number(m.stockQty) || 0, stocked: m.stocked !== false, supplier: m.supplier || ""
+      stock_qty: Number(m.stockQty) || 0, stocked: m.stocked !== false, supplier: m.supplier || "",
+      moq: Number(m.moq) || 0, lead_days: Number(m.leadDays) || 0
     };
   }
   function matFrom(r) {
     return {
       code: r.code, name: r.name, category: r.category, unit: r.unit,
-      stockQty: Number(r.stock_qty) || 0, stocked: !!r.stocked, supplier: r.supplier
+      stockQty: Number(r.stock_qty) || 0, stocked: !!r.stocked, supplier: r.supplier,
+      moq: Number(r.moq) || 0, leadDays: Number(r.lead_days) || 0
+    };
+  }
+  function custRow(c) {
+    return {
+      id: c.id, name: c.name || "", address: c.address || "", pic: c.pic || "",
+      contact: c.contact || "", terms: c.terms || ""
+    };
+  }
+  function custFrom(r) {
+    return {
+      id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms
+    };
+  }
+  function formulaRow(f) {
+    return {
+      id: f.id, kategori: f.kategori || "", customer_id: f.customerId || null,
+      urutan: Number(f.urutan) || 0, bj: Number(f.bj) || 1,
+      ph_min: f.phMin == null ? null : Number(f.phMin), ph_max: f.phMax == null ? null : Number(f.phMax),
+      viscosity: f.viscosity || "",
+      stab_tk: f.stabTk || "-", stab_tkul: f.stabTkul || "-", stab_t50: f.stabT50 || "-", stab_tm: f.stabTm || "-",
+      note: f.note || ""
+    };
+  }
+  function formulaFrom(r) {
+    return {
+      id: r.id, kategori: r.kategori, customerId: r.customer_id || "", urutan: Number(r.urutan) || 0,
+      bj: Number(r.bj) || 1, phMin: r.ph_min == null ? "" : Number(r.ph_min), phMax: r.ph_max == null ? "" : Number(r.ph_max),
+      viscosity: r.viscosity, stabTk: r.stab_tk, stabTkul: r.stab_tkul, stabT50: r.stab_t50, stabTm: r.stab_tm,
+      note: r.note
+    };
+  }
+  function packRow(p) {
+    return {
+      id: p.id, customer_id: p.customerId || null,
+      urutan_varian: Number(p.urutanVarian) || 0, revisi: Number(p.revisi) || 0,
+      fill_min: Number(p.fillMin) || 0, fill_max: Number(p.fillMax) || 0,
+      shrink_tunnel_c: Number(p.shrinkTunnelC) || 0, inkjet_syntax: p.inkjetSyntax || "", note: p.note || ""
+    };
+  }
+  function packFrom(r) {
+    return {
+      id: r.id, customerId: r.customer_id || "", urutanVarian: Number(r.urutan_varian) || 0,
+      revisi: Number(r.revisi) || 0, fillMin: Number(r.fill_min) || 0, fillMax: Number(r.fill_max) || 0,
+      shrinkTunnelC: Number(r.shrink_tunnel_c) || 0, inkjetSyntax: r.inkjet_syntax, note: r.note
+    };
+  }
+  function mixerRow(m) {
+    return {
+      id: m.id, name: m.name || "", vessel: m.vessel || "",
+      capacity_kg: Number(m.capacityKg) || 0, active: m.active !== false
+    };
+  }
+  function mixerFrom(r) {
+    return {
+      id: r.id, name: r.name, vessel: r.vessel, capacityKg: Number(r.capacity_kg) || 0, active: !!r.active
     };
   }
   function bomRow(b) {
@@ -85,45 +150,92 @@ window.Sync = (function () {
       id: b.id, no_bom: b.noBom, fg_id: b.fgId, revision: Number(b.revision) || 0,
       mulai_berlaku: b.mulaiBerlaku || "", customer: b.customer || "", no_customer: b.noCustomer || "",
       bulk_code: b.bulkCode || "", batch_size: b.batchSize || "",
-      batch_yield: Number(b.batchYield) || 0, status: b.status || ""
+      batch_yield: Number(b.batchYield) || 0, status: b.status || "",
+      formula_id: b.formulaId || null, packaging_id: b.packagingId || null
     };
   }
-  function lineRow(bomId, it, i) {
+  function bomFrom(r) {
     return {
-      bom_id: bomId, sort: i, section: it.section, material_code: it.materialCode,
-      qty_per_unit: Number(it.qtyPerUnit) || 0, qty_per_batch: Number(it.qtyPerBatch) || 0,
-      unit: it.unit || "", supported_by: it.supportedBy || "",
-      loss_pct: Number(it.lossPct) || 0, note: it.note || ""
+      id: r.id, noBom: r.no_bom, fgId: r.fg_id, revision: r.revision,
+      mulaiBerlaku: r.mulai_berlaku, customer: r.customer, noCustomer: r.no_customer,
+      bulkCode: r.bulk_code, batchSize: r.batch_size, batchYield: Number(r.batch_yield) || 0,
+      status: r.status, formulaId: r.formula_id || "", packagingId: r.packaging_id || "", items: []
     };
+  }
+  function bomLineRows(b) {
+    return (b.items || []).map(function (it, i) {
+      return {
+        bom_id: b.id, sort: i, section: it.section, material_code: it.materialCode,
+        qty_per_unit: Number(it.qtyPerUnit) || 0, qty_per_batch: Number(it.qtyPerBatch) || 0,
+        unit: it.unit || "", supported_by: it.supportedBy || "",
+        loss_pct: Number(it.lossPct) || 0, note: it.note || ""
+      };
+    });
+  }
+  function simRow(s) { return { id: s.id, no_sim: s.noSim, payload: s }; }
+  function simFrom(r) { return r.payload; }
+  function reqRow(r) { return { id: r.id, type: r.type, no_doc: r.noDoc, payload: r }; }
+  function reqFrom(r) { return r.payload; }
+
+  /* ---------- table registry ----------
+     v = migration that introduced the table (v > 1 may be absent).
+     children = dependent rows re-pushed together with the parent.   */
+  var TABLES = [
+    { name: "fg_master", pk: "id", key: "id", store: "fgs", v: 1, row: fgRow, from: fgFrom },
+    { name: "materials", pk: "code", key: "code", store: "materials", v: 1, row: matRow, from: matFrom },
+    { name: "m_customer", pk: "id", key: "id", store: "customers", v: 2, row: custRow, from: custFrom },
+    { name: "m_formula", pk: "id", key: "id", store: "formulas", v: 2, row: formulaRow, from: formulaFrom },
+    { name: "m_packaging", pk: "id", key: "id", store: "packagings", v: 2, row: packRow, from: packFrom },
+    { name: "m_mixer", pk: "id", key: "id", store: "mixers", v: 2, row: mixerRow, from: mixerFrom },
+    { name: "boms", pk: "id", key: "id", store: "boms", v: 1, row: bomRow, from: bomFrom,
+      children: [{ name: "bom_lines", fk: "bom_id", order: "bom_id,sort", flatten: bomLineRows }],
+      nest: function (db, rows) {
+        var byBom = {};
+        (rows["bom_lines"] || []).forEach(function (l) {
+          (byBom[l.bom_id] = byBom[l.bom_id] || []).push({
+            section: l.section, materialCode: l.material_code,
+            qtyPerUnit: Number(l.qty_per_unit) || 0, qtyPerBatch: Number(l.qty_per_batch) || 0,
+            unit: l.unit, supportedBy: l.supported_by, lossPct: Number(l.loss_pct) || 0, note: l.note
+          });
+        });
+        db.boms.forEach(function (b) { b.items = byBom[b.id] || []; });
+      } },
+    { name: "sims", pk: "id", key: "id", store: "sims", v: 1, order: "created_at.desc", row: simRow, from: simFrom },
+    { name: "requests", pk: "id", key: "id", store: "requests", v: 1, order: "created_at.desc", row: reqRow, from: reqFrom }
+  ];
+  /* append-only / single-row tables stay hand-coded */
+  var EXTRAS = [
+    { name: "audit_log", order: "id.desc" },
+    { name: "meta_kv", order: "" }
+  ];
+  function childTables() {
+    var out = [];
+    TABLES.forEach(function (t) { (t.children || []).forEach(function (c) { out.push(c); }); });
+    return out;
+  }
+  function isMissingTable(err) {
+    return !!err && (err.code === "42P01" || err.code === "PGRST205" ||
+      /does not exist|schema cache/i.test(err.message || ""));
+  }
+  function fetchTable(spec) {
+    return SB.selectAll(spec.name, "", spec.order || "").catch(function (err) {
+      if (isMissingTable(err)) { missing[spec.name] = true; return []; }
+      throw err;
+    });
   }
 
   /* ---------- hydrate: cloud -> local working copy ---------- */
   function hydrate() {
-    return Promise.all([
-      SB.selectAll("fg_master"),
-      SB.selectAll("materials"),
-      SB.selectAll("boms"),
-      SB.selectAll("bom_lines", "", "bom_id,sort"),
-      SB.selectAll("sims", "", "created_at.desc"),
-      SB.selectAll("requests", "", "created_at.desc"),
-      SB.selectAll("audit_log", "", "id.desc"),
-      SB.selectAll("meta_kv")
-    ]).then(function (res) {
-      var fgRows = res[0], matRows = res[1], bomRows = res[2], lineRows = res[3];
-      var simRows = res[4], reqRows = res[5], auditRows = res[6], kvRows = res[7];
+    missing = {};
+    var kids = childTables();
+    var specs = TABLES.concat(kids).concat(EXTRAS);
+    return Promise.all(specs.map(fetchTable)).then(function (res) {
+      var rows = {};
+      specs.forEach(function (s, i) { rows[s.name] = res[i] || []; });
 
-      var linesByBom = {};
-      lineRows.forEach(function (l) {
-        (linesByBom[l.bom_id] = linesByBom[l.bom_id] || []).push({
-          section: l.section, materialCode: l.material_code,
-          qtyPerUnit: Number(l.qty_per_unit) || 0, qtyPerBatch: Number(l.qty_per_batch) || 0,
-          unit: l.unit, supportedBy: l.supported_by, lossPct: Number(l.loss_pct) || 0, note: l.note
-        });
-      });
-
-      var kv = (kvRows.filter(function (k) { return k.key === "app"; })[0] || {}).value || {};
-      lastCloudEmpty = !fgRows.length && !matRows.length && !bomRows.length &&
-        !simRows.length && !reqRows.length;
+      var kv = (rows.meta_kv.filter(function (k) { return k.key === "app"; })[0] || {}).value || {};
+      lastCloudEmpty = !rows.fg_master.length && !rows.materials.length && !rows.boms.length &&
+        !rows.sims.length && !rows.requests.length;
       var local = Store.get();
       var db = {
         meta: {
@@ -134,22 +246,13 @@ window.Sync = (function () {
           seq: kv.seq || { bom: 0, mr: 0, pr: 0, sim: 0 },
           expWarnDays: kv.expWarnDays != null ? kv.expWarnDays : 90
         },
-        fgs: fgRows.map(fgFrom),
-        materials: matRows.map(matFrom),
-        boms: bomRows.map(function (b) {
-          return {
-            id: b.id, noBom: b.no_bom, fgId: b.fg_id, revision: b.revision,
-            mulaiBerlaku: b.mulai_berlaku, customer: b.customer, noCustomer: b.no_customer,
-            bulkCode: b.bulk_code, batchSize: b.batch_size, batchYield: Number(b.batch_yield) || 0,
-            status: b.status, items: linesByBom[b.id] || []
-          };
-        }),
-        sims: simRows.map(function (r) { return r.payload; }),
-        requests: reqRows.map(function (r) { return r.payload; }),
-        audit: auditRows.slice(0, 1000).map(function (r) {
+        audit: rows.audit_log.slice(0, 1000).map(function (r) {
           return { ts: r.ts, user: r.user_name, role: r.role, action: r.action, entity: r.entity, detail: r.detail };
         })
       };
+      TABLES.forEach(function (t) { db[t.store] = rows[t.name].map(t.from); });
+      TABLES.forEach(function (t) { if (t.nest) t.nest(db, rows); });
+
       /* Refresh / re-login race: the debounced push may not have run before
          this hydrate replaced the working copy, and the cloud still holds
          the pre-edit rows. Re-apply every change waiting in the push queue
@@ -160,20 +263,15 @@ window.Sync = (function () {
         var m = pending[k];
         (dirty[m.table] = dirty[m.table] || []).push(m);
       });
-      function reapply(tbl, arrName, keyField) {
-        (dirty[tbl] || []).forEach(function (m) {
-          db[arrName] = db[arrName].filter(function (x) { return String(x[keyField]) !== String(m.key); });
+      TABLES.forEach(function (t) {
+        (dirty[t.name] || []).forEach(function (m) {
+          db[t.store] = db[t.store].filter(function (x) { return String(x[t.key]) !== String(m.key); });
           if (m.op !== "delete") {
-            var lr = (local[arrName] || []).filter(function (x) { return String(x[keyField]) === String(m.key); })[0];
-            if (lr) db[arrName].push(JSON.parse(JSON.stringify(lr)));
+            var lr = (local[t.store] || []).filter(function (x) { return String(x[t.key]) === String(m.key); })[0];
+            if (lr) db[t.store].push(JSON.parse(JSON.stringify(lr)));
           }
         });
-      }
-      reapply("fg_master", "fgs", "id");
-      reapply("materials", "materials", "code");
-      reapply("boms", "boms", "id");
-      reapply("sims", "sims", "id");
-      reapply("requests", "requests", "id");
+      });
       if (auditQueue > 0 && local.audit && local.audit.length) {
         /* keep unpushed local audit rows at the front so the flush inserts
            exactly those (slice(0, queue)) instead of duplicating cloud rows */
@@ -220,6 +318,9 @@ window.Sync = (function () {
     clearTimeout(timer);
     timer = setTimeout(function () { flush(); }, 1200);
   }
+  function quote(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
+  function inList(ids) { return "in.(" + ids.map(quote).join(",") + ")"; }
+
   function flush() {
     if (!enabled() || status === "login" || status === "syncing") return Promise.resolve();
     if (!SB.me()) return Promise.resolve();
@@ -232,60 +333,55 @@ window.Sync = (function () {
     var doReplace = replaceAll;
     var queue = auditQueue;
     var chain = Promise.resolve();
+    /* tables absent on the cloud keep their marks queued until the
+       migration is run - never silently dropped */
+    var available = TABLES.filter(function (t) { return !missing[t.name]; });
 
     function group(table, op) {
-      return marks.filter(function (m) { return m.table === table && m.op === op; }).map(function (m) { return m.key; });
+      return marks.filter(function (m) { return m.table === table && m.op === op; })
+        .map(function (m) { return m.key; });
     }
-    function fgByIds(ids) { return db.fgs.filter(function (f) { return ids.indexOf(f.id) >= 0; }).map(fgRow); }
-    function matByCodes(codes) { return db.materials.filter(function (m) { return codes.indexOf(m.code) >= 0; }).map(matRow); }
+    function recsOf(t, ids) {
+      return db[t.store].filter(function (r) { return ids.indexOf(r[t.key]) >= 0; });
+    }
 
     if (doReplace) {
       /* PostgREST refuses DELETE without a WHERE clause, and wiping an
          already-empty cloud (first-sign-in migration) is pointless. */
       if (!lastCloudEmpty) {
-        chain = chain
-          .then(function () { return SB.remove("bom_lines", "id=not.is.null"); })
-          .then(function () { return SB.remove("boms", "id=not.is.null"); })
-          .then(function () { return SB.remove("fg_master", "id=not.is.null"); })
-          .then(function () { return SB.remove("materials", "code=not.is.null"); })
-          .then(function () { return SB.remove("sims", "id=not.is.null"); })
-          .then(function () { return SB.remove("requests", "id=not.is.null"); })
-          .then(function () { return SB.remove("meta_kv", "key=not.is.null"); });
-      }
-      chain = chain.then(function () { return pushEverything(db); });
-    } else {
-      var fgUp = group("fg_master", "upsert"), fgDel = group("fg_master", "delete");
-      var matUp = group("materials", "upsert"), matDel = group("materials", "delete");
-      var bomUp = group("boms", "upsert"), bomDel = group("boms", "delete");
-      var simUp = group("sims", "upsert"), reqUp = group("requests", "upsert");
-
-      if (fgDel.length) chain = chain.then(function () { return SB.remove("fg_master", "id=in.(" + fgDel.map(quote).join(",") + ")"); });
-      if (fgUp.length) chain = chain.then(function () { return SB.upsert("fg_master", fgByIds(fgUp)); });
-      if (matDel.length) chain = chain.then(function () { return SB.remove("materials", "code=in.(" + matDel.map(quote).join(",") + ")"); });
-      if (matUp.length) chain = chain.then(function () { return SB.upsert("materials", matByCodes(matUp)); });
-      if (bomDel.length) chain = chain
-        .then(function () { return SB.remove("bom_lines", "bom_id=in.(" + bomDel.map(quote).join(",") + ")"); })
-        .then(function () { return SB.remove("boms", "id=in.(" + bomDel.map(quote).join(",") + ")"); });
-      if (bomUp.length) {
-        chain = chain
-          .then(function () { return SB.upsert("boms", db.boms.filter(function (b) { return bomUp.indexOf(b.id) >= 0; }).map(bomRow)); })
-          .then(function () { return SB.remove("bom_lines", "bom_id=in.(" + bomUp.map(quote).join(",") + ")"); })
-          .then(function () {
-            var rows = [];
-            db.boms.forEach(function (b) {
-              if (bomUp.indexOf(b.id) < 0) return;
-              b.items.forEach(function (it, i) { rows.push(lineRow(b.id, it, i)); });
-            });
-            return SB.insert("bom_lines", rows);
+        available.slice().reverse().forEach(function (t) {
+          (t.children || []).slice().reverse().forEach(function (c) {
+            chain = chain.then(function () { return SB.remove(c.name, c.fk + "=not.is.null"); });
           });
+          chain = chain.then(function () { return SB.remove(t.name, t.pk + "=not.is.null"); });
+        });
+        chain = chain.then(function () { return SB.remove("meta_kv", "key=not.is.null"); });
       }
-      if (simUp.length) chain = chain.then(function () {
-        return SB.upsert("sims", db.sims.filter(function (s) { return simUp.indexOf(s.id) >= 0; })
-          .map(function (s) { return { id: s.id, no_sim: s.noSim, payload: s }; }));
+      chain = chain.then(function () { return pushEverything(db, available); });
+    } else {
+      /* deletes first, dependents before parents */
+      available.slice().reverse().forEach(function (t) {
+        var ids = group(t.name, "delete");
+        if (!ids.length) return;
+        (t.children || []).slice().reverse().forEach(function (c) {
+          chain = chain.then(function () { return SB.remove(c.name, c.fk + "=" + inList(ids)); });
+        });
+        chain = chain.then(function () { return SB.remove(t.name, t.pk + "=" + inList(ids)); });
       });
-      if (reqUp.length) chain = chain.then(function () {
-        return SB.upsert("requests", db.requests.filter(function (r) { return reqUp.indexOf(r.id) >= 0; })
-          .map(function (r) { return { id: r.id, type: r.type, no_doc: r.noDoc, payload: r }; }));
+      /* then upserts, parents before dependents */
+      available.forEach(function (t) {
+        var ids = group(t.name, "upsert");
+        if (!ids.length) return;
+        chain = chain.then(function () { return SB.upsert(t.name, recsOf(t, ids).map(t.row)); });
+        (t.children || []).forEach(function (c) {
+          chain = chain
+            .then(function () { return SB.remove(c.name, c.fk + "=" + inList(ids)); })
+            .then(function () {
+              var flat = [];
+              recsOf(t, ids).forEach(function (r) { flat = flat.concat(c.flatten(r)); });
+              return SB.insert(c.name, flat);
+            });
+        });
       });
     }
 
@@ -305,7 +401,13 @@ window.Sync = (function () {
     });
 
     return chain.then(function () {
-      pending = {}; auditQueue = 0; replaceAll = false;
+      var keep = {};
+      Object.keys(pending).forEach(function (k) {
+        if (missing[pending[k].table]) keep[k] = pending[k];
+      });
+      pending = keep;
+      auditQueue = 0;
+      replaceAll = replaceAll && missingTables().length > 0;
       savePending();
       setStatus("cloud");
     }).catch(function (err) {
@@ -313,21 +415,20 @@ window.Sync = (function () {
       if (window.console) console.warn("Sync push failed:", err && err.message);
     });
   }
-  function quote(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
 
-  function pushEverything(db) {
-    var lineRows = [];
-    db.boms.forEach(function (b) { b.items.forEach(function (it, i) { lineRows.push(lineRow(b.id, it, i)); }); });
-    return SB.upsert("fg_master", db.fgs.map(fgRow))
-      .then(function () { return SB.upsert("materials", db.materials.map(matRow)); })
-      .then(function () { return SB.upsert("boms", db.boms.map(bomRow)); })
-      .then(function () { return SB.insert("bom_lines", lineRows); })
-      .then(function () {
-        return SB.upsert("sims", db.sims.map(function (s) { return { id: s.id, no_sim: s.noSim, payload: s }; }));
-      })
-      .then(function () {
-        return SB.upsert("requests", db.requests.map(function (r) { return { id: r.id, type: r.type, no_doc: r.noDoc, payload: r }; }));
+  function pushEverything(db, available) {
+    var chain = Promise.resolve();
+    available.forEach(function (t) {
+      chain = chain.then(function () { return SB.upsert(t.name, db[t.store].map(t.row)); });
+      (t.children || []).forEach(function (c) {
+        chain = chain.then(function () {
+          var flat = [];
+          db[t.store].forEach(function (r) { flat = flat.concat(c.flatten(r)); });
+          return SB.insert(c.name, flat);
+        });
       });
+    });
+    return chain;
   }
 
   /* ---------- lifecycle ---------- */
@@ -337,7 +438,7 @@ window.Sync = (function () {
     SB.init(window.ASTORIA_SUPABASE.url, window.ASTORIA_SUPABASE.anonKey);
     if (!SB.restore()) { setStatus("login"); cb("login"); return; }
     localSnapshot = JSON.parse(JSON.stringify(Store.get()));
-    localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials.length || 0);
+    localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials || []).length;
     bootFromCloud(cb);
   }
   function bootFromCloud(cb) {
@@ -357,7 +458,7 @@ window.Sync = (function () {
   }
   function login(email, password, cb, errCb) {
     localSnapshot = JSON.parse(JSON.stringify(Store.get()));
-    localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials.length || 0);
+    localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials || []).length;
     SB.signIn(email, password)
       .then(function () { return ensureProfile(); })
       .then(function () { applyProfileUser(); return hydrate(); })
@@ -386,6 +487,7 @@ window.Sync = (function () {
     getStatus: getStatus, onChange: onChange, pendingCount: pendingCount,
     mark: mark, markAudit: markAudit, markAll: markAll,
     flush: flush, flushSoon: flushSoon, hydrate: hydrate,
-    getProfile: getProfile, applyProfileUser: applyProfileUser
+    getProfile: getProfile, applyProfileUser: applyProfileUser,
+    missingTables: missingTables
   };
 })();

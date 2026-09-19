@@ -29,7 +29,7 @@ window.App = (function () {
      Admin-only page. Offline/local mode has no accounts at all - the acting
      user is the machine owner and this page is the only way to change role or
      export a backup, so it stays reachable there. */
-  function isAdmin() { return (Store.get().meta.user || {}).role === "Admin"; }
+  function isAdmin() { return RBAC.isAdmin(); }
   function canOpenSettings() { return isAdmin() || !(window.Sync && Sync.enabled()); }
 
   function renderNav() {
@@ -128,14 +128,22 @@ window.App = (function () {
     chip.hidden = false;
     var s = Sync.getStatus();
     var n = Sync.pendingCount();
+    /* v2 tables absent on the cloud until migration 002 is run: their rows
+       stay queued locally, so say so instead of claiming "synced" */
+    var miss = (Sync.missingTables && Sync.missingTables()) || [];
     var labels = {
       local: "Local mode",
       login: "Cloud sign-in",
       syncing: "Syncing\u2026",
-      cloud: n ? "Cloud \u00b7 " + n + " pending" : "Cloud \u00b7 synced",
+      cloud: miss.length
+        ? "Cloud \u00b7 migration pending"
+        : (n ? "Cloud \u00b7 " + n + " pending" : "Cloud \u00b7 synced"),
       offline: "Offline \u00b7 " + n + " queued"
     };
     chip.textContent = labels[s] || "Cloud";
+    chip.title = miss.length
+      ? "Waiting for supabase/migrations/002_pipeline_foundation.sql (missing: " + miss.join(", ") + ")"
+      : "";
     chip.dataset.s = s;
   }
 

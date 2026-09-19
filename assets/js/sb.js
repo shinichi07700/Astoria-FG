@@ -35,7 +35,10 @@ window.SB = (function () {
       try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
       if (!r.ok) {
         var msg = (j && (j.error_description || j.msg || j.error)) || t || ("HTTP " + r.status);
-        throw new Error(msg);
+        var err = new Error(msg);
+        err.status = r.status;
+        err.code = (j && j.code) || "";
+        throw err;
       }
       return j;
     });

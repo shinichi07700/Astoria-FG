@@ -6,6 +6,21 @@ window.Store = (function () {
 
   var KEY = "astoria_fg_suite_v1";
   var db = null;
+  /* document sequences used across the pipeline (FR-xx numbering) */
+  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj"];
+  function fixSeq() {
+    db.meta.seq = db.meta.seq || {};
+    SEQ_KEYS.forEach(function (k) { if (db.meta.seq[k] == null) db.meta.seq[k] = 0; });
+  }
+  function fixArrays() {
+    db.customers = db.customers || [];
+    db.formulas = db.formulas || [];
+    db.packagings = db.packagings || [];
+    db.mixers = db.mixers || [];
+    db.sims = db.sims || [];
+    db.requests = db.requests || [];
+    db.audit = db.audit || [];
+  }
 
   function load() {
     try {
@@ -15,11 +30,9 @@ window.Store = (function () {
     } catch (e) {
       db = Seed.build();
     }
-    db.meta.seq = db.meta.seq || { bom: 0, mr: 0, pr: 0, sim: 0 };
+    fixSeq();
     db.meta.user = db.meta.user || { name: "User", email: "", role: "PPIC" };
-    db.sims = db.sims || [];
-    db.requests = db.requests || [];
-    db.audit = db.audit || [];
+    fixArrays();
     refreshDerived();
     return db;
   }
@@ -31,11 +44,9 @@ window.Store = (function () {
   /* Cloud hydrate: replace the working copy without marking dirty */
   function hydrate(next) {
     db = next;
-    db.meta.seq = db.meta.seq || { bom: 0, mr: 0, pr: 0, sim: 0 };
+    fixSeq();
     db.meta.user = db.meta.user || { name: "User", email: "", role: "PPIC" };
-    db.sims = db.sims || [];
-    db.requests = db.requests || [];
-    db.audit = db.audit || [];
+    fixArrays();
     refreshDerived();
     localStorage.setItem(KEY, JSON.stringify(db));
   }
@@ -160,6 +171,55 @@ window.Store = (function () {
     save();
     return true;
   }
+
+  /* ---------- pipeline master CRUD (customer / formula / packaging / mixer) ----------
+     One generic write-back helper; each master only supplies its cloud
+     table, store array, key and audit wording. */
+  var MASTER_CFG = {
+    customer: { table: "m_customer", store: "customers", key: "id", label: "Master Customer",
+      describe: function (c) { return c.id + " " + (c.name || ""); } },
+    formula: { table: "m_formula", store: "formulas", key: "id", label: "Master Formula (FFS)",
+      describe: function (f) { return f.id + " kategori " + (f.kategori || "-") + " BJ " + (f.bj || 1); } },
+    packaging: { table: "m_packaging", store: "packagings", key: "id", label: "Master Packaging (FPS)",
+      describe: function (p) { return p.id + " rev " + (p.revisi || 0); } },
+    mixer: { table: "m_mixer", store: "mixers", key: "id", label: "Mixer catalogue",
+      describe: function (m) { return m.id + " " + (m.name || "") + " " + (m.capacityKg || 0) + " kg"; } }
+  };
+  function saveMaster(which, rec, isNew, oldId) {
+    var cfg = MASTER_CFG[which];
+    replaceRow(db[cfg.store], cfg.key, oldId || rec[cfg.key], rec, true);
+    audit(isNew ? "CREATE" : "UPDATE", cfg.label, cfg.describe(rec));
+    if (window.Sync) {
+      if (!isNew && oldId && oldId !== rec[cfg.key]) Sync.mark(cfg.table, oldId, "delete");
+      Sync.mark(cfg.table, rec[cfg.key]);
+    }
+    save();
+    return rec;
+  }
+  function deleteMaster(which, id) {
+    var cfg = MASTER_CFG[which];
+    var rec = db[cfg.store].filter(function (x) { return String(x[cfg.key]) === String(id); })[0];
+    db[cfg.store] = db[cfg.store].filter(function (x) { return String(x[cfg.key]) !== String(id); });
+    if (rec) audit("DELETE", cfg.label, cfg.describe(rec));
+    if (window.Sync) Sync.mark(cfg.table, id, "delete");
+    save();
+  }
+  function masterById(which, id) {
+    var cfg = MASTER_CFG[which];
+    return db[cfg.store].filter(function (x) { return String(x[cfg.key]) === String(id); })[0] || null;
+  }
+  function saveCustomer(rec, isNew, oldId) { return saveMaster("customer", rec, isNew, oldId); }
+  function saveFormula(rec, isNew, oldId) { return saveMaster("formula", rec, isNew, oldId); }
+  function savePackaging(rec, isNew, oldId) { return saveMaster("packaging", rec, isNew, oldId); }
+  function saveMixer(rec, isNew, oldId) { return saveMaster("mixer", rec, isNew, oldId); }
+  function deleteCustomer(id) { deleteMaster("customer", id); }
+  function deleteFormula(id) { deleteMaster("formula", id); }
+  function deletePackaging(id) { deleteMaster("packaging", id); }
+  function deleteMixer(id) { deleteMaster("mixer", id); }
+  function customerById(id) { return masterById("customer", id); }
+  function formulaById(id) { return masterById("formula", id); }
+  function packagingById(id) { return masterById("packaging", id); }
+  function mixerById(id) { return masterById("mixer", id); }
 
   /* ---------- BOM CRUD ---------- */
   function saveBOM(rec, isNew) {
@@ -313,6 +373,10 @@ window.Store = (function () {
     fgCompare: fgCompare, fgRecentCompare: fgRecentCompare, fgDescCompare: fgDescCompare,
     saveFG: saveFG, deleteFG: deleteFG, reviseFG: reviseFG,
     saveMaterial: saveMaterial, deleteMaterial: deleteMaterial,
+    saveCustomer: saveCustomer, deleteCustomer: deleteCustomer, customerById: customerById,
+    saveFormula: saveFormula, deleteFormula: deleteFormula, formulaById: formulaById,
+    savePackaging: savePackaging, deletePackaging: deletePackaging, packagingById: packagingById,
+    saveMixer: saveMixer, deleteMixer: deleteMixer, mixerById: mixerById,
     saveBOM: saveBOM, deleteBOM: deleteBOM,
     saveSim: saveSim, saveRequest: saveRequest,
     exportJSON: exportJSON, importJSON: importJSON, resetToSample: resetToSample,
