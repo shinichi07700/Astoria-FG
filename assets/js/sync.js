@@ -254,6 +254,77 @@ window.Sync = (function () {
       status: r.status || "Planned"
     };
   }
+  /* ---- Phase 3 purchasing / warehouse tables (migration 004, v:4) ---- */
+  function poRow(p) {
+    return {
+      id: p.id, po_no: p.poNo || "", pr_id: p.prId || null, supplier: p.supplier || "",
+      material_code: p.materialCode || "", material_name: p.materialName || "",
+      qty: Number(p.qty) || 0, received_qty: Number(p.receivedQty) || 0,
+      unit_price: Number(p.unitPrice) || 0, unit: p.unit || "",
+      lead_days: Number(p.leadDays) || 0, eta: p.eta || null,
+      status: p.status || "Open", note: p.note || ""
+    };
+  }
+  function poFrom(r) {
+    return {
+      id: r.id, poNo: r.po_no || "", prId: r.pr_id || "", supplier: r.supplier || "",
+      materialCode: r.material_code || "", materialName: r.material_name || "",
+      qty: Number(r.qty) || 0, receivedQty: Number(r.received_qty) || 0,
+      unitPrice: Number(r.unit_price) || 0, unit: r.unit || "",
+      leadDays: Number(r.lead_days) || 0, eta: r.eta || "",
+      status: r.status || "Open", note: r.note || ""
+    };
+  }
+  function lotRow(l) {
+    return {
+      id: l.id, lot_no: l.lotNo || "", material_code: l.materialCode || "", material_name: l.materialName || "",
+      po_id: l.poId || null, qty: Number(l.qty) || 0, qty_received: Number(l.qtyReceived) || 0,
+      uom: l.uom || "", received_at: l.receivedAt || null,
+      coa_ref: l.coaRef || "", halal_ref: l.halalRef || "", msds_ref: l.msdsRef || "",
+      expiry: l.expiry || null, status: l.status || "Quarantine", note: l.note || ""
+    };
+  }
+  function lotFrom(r) {
+    return {
+      id: r.id, lotNo: r.lot_no || "", materialCode: r.material_code || "", materialName: r.material_name || "",
+      poId: r.po_id || "", qty: Number(r.qty) || 0, qtyReceived: Number(r.qty_received) || 0,
+      uom: r.uom || "", receivedAt: r.received_at || "",
+      coaRef: r.coa_ref || "", halalRef: r.halal_ref || "", msdsRef: r.msds_ref || "",
+      expiry: r.expiry || "", status: r.status || "Quarantine", note: r.note || ""
+    };
+  }
+  function txnRow(t) {
+    return {
+      id: t.id, txn_type: t.txnType || "ADJUST", material_code: t.materialCode || "", material_name: t.materialName || "",
+      lot_id: t.lotId || null, wo_id: t.woId || null, qty: Number(t.qty) || 0, uom: t.uom || "",
+      ref_type: t.refType || "", ref_id: t.refId || "", note: t.note || "", txn_at: t.txnAt || ""
+    };
+  }
+  function txnFrom(r) {
+    return {
+      id: r.id, txnType: r.txn_type || "ADJUST", materialCode: r.material_code || "", materialName: r.material_name || "",
+      lotId: r.lot_id || "", woId: r.wo_id || "", qty: Number(r.qty) || 0, uom: r.uom || "",
+      refType: r.ref_type || "", refId: r.ref_id || "", note: r.note || "", txnAt: r.txn_at || ""
+    };
+  }
+  function stgRow(s) {
+    return {
+      id: s.id, staging_no: s.stagingNo || "", doc_type: s.docType || "FR-PP-01",
+      wo_id: s.woId || null, campaign_no: s.campaignNo || "", fg_id: s.fgId || null,
+      material_code: s.materialCode || "", material_name: s.materialName || "",
+      lot_id: s.lotId || null, lot_no: s.lotNo || "", qty: Number(s.qty) || 0, uom: s.uom || "",
+      status: s.status || "Reserved", weighed_by: s.weighedBy || "", weighed_at: s.weighedAt || "", note: s.note || ""
+    };
+  }
+  function stgFrom(r) {
+    return {
+      id: r.id, stagingNo: r.staging_no || "", docType: r.doc_type || "FR-PP-01",
+      woId: r.wo_id || "", campaignNo: r.campaign_no || "", fgId: r.fg_id || "",
+      materialCode: r.material_code || "", materialName: r.material_name || "",
+      lotId: r.lot_id || "", lotNo: r.lot_no || "", qty: Number(r.qty) || 0, uom: r.uom || "",
+      status: r.status || "Reserved", weighedBy: r.weighed_by || "", weighedAt: r.weighed_at || "", note: r.note || ""
+    };
+  }
 
   /* ---------- table registry ----------
      v = migration that introduced the table (v > 1 may be absent).
@@ -284,7 +355,12 @@ window.Sync = (function () {
     { name: "t_sales_order", pk: "id", key: "id", store: "salesOrders", v: 3, order: "created_at.desc", row: soRow, from: soFrom },
     { name: "t_purchase_req", pk: "id", key: "id", store: "purchaseReqs", v: 3, order: "created_at.desc", row: prRow, from: prFrom },
     { name: "t_calloff", pk: "id", key: "id", store: "calloffs", v: 3, order: "created_at.desc", row: coRow, from: coFrom },
-    { name: "t_work_order_bulk", pk: "id", key: "id", store: "workOrdersBulk", v: 3, order: "created_at.desc", row: woRow, from: woFrom }
+    { name: "t_work_order_bulk", pk: "id", key: "id", store: "workOrdersBulk", v: 3, order: "created_at.desc", row: woRow, from: woFrom },
+    /* migration 004 - parents before dependents (PO -> lot -> txn / staging) */
+    { name: "t_purchase_order", pk: "id", key: "id", store: "purchaseOrders", v: 4, order: "created_at.desc", row: poRow, from: poFrom },
+    { name: "t_inventory_lot", pk: "id", key: "id", store: "inventoryLots", v: 4, order: "created_at.desc", row: lotRow, from: lotFrom },
+    { name: "t_inventory_txn", pk: "id", key: "id", store: "inventoryTxns", v: 4, order: "created_at.desc", row: txnRow, from: txnFrom },
+    { name: "t_staging", pk: "id", key: "id", store: "stagings", v: 4, order: "created_at.desc", row: stgRow, from: stgFrom }
   ];
   /* append-only / single-row tables stay hand-coded */
   var EXTRAS = [

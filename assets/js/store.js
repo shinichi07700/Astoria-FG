@@ -7,7 +7,7 @@ window.Store = (function () {
   var KEY = "astoria_fg_suite_v1";
   var db = null;
   /* document sequences used across the pipeline (FR-xx numbering) */
-  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign"];
+  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign", "staging"];
   function fixSeq() {
     db.meta.seq = db.meta.seq || {};
     SEQ_KEYS.forEach(function (k) { if (db.meta.seq[k] == null) db.meta.seq[k] = 0; });
@@ -21,6 +21,10 @@ window.Store = (function () {
     db.purchaseReqs = db.purchaseReqs || [];
     db.calloffs = db.calloffs || [];
     db.workOrdersBulk = db.workOrdersBulk || [];
+    db.purchaseOrders = db.purchaseOrders || [];
+    db.inventoryLots = db.inventoryLots || [];
+    db.inventoryTxns = db.inventoryTxns || [];
+    db.stagings = db.stagings || [];
     db.sims = db.sims || [];
     db.requests = db.requests || [];
     db.audit = db.audit || [];
@@ -424,6 +428,226 @@ window.Store = (function () {
       prCount: prCount, calloffCount: coCount, woCount: woCount, purged: purged };
   }
 
+  /* ============================================================
+     PHASE 3 - purchasing, warehouse inbound & the stock ledger
+     ============================================================ */
+
+  /* ---------- stock ledger (append-only) ----------
+     materials.stock_qty is the running cache; every posting keeps it in
+     step so reads stay O(1). The opening balance (stock that predates the
+     ledger) is derived, never stored: opening = cache - sum(ledger qty).
+     Signed qty: RECEIPT / ADJUST-up positive, ISSUE negative. */
+  function txnById(id) { return db.inventoryTxns.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function netLedger(code) {
+    return db.inventoryTxns.reduce(function (a, t) {
+      return t.materialCode === code ? a + (Number(t.qty) || 0) : a;
+    }, 0);
+  }
+  function sohOf(code) { var m = matMap()[code]; return m ? Number(m.stockQty) || 0 : 0; }
+  function openingOf(code) { return Engine.round4(sohOf(code) - netLedger(code)); }
+  function allocatedOf(code) {
+    return db.stagings.reduce(function (a, s) {
+      return (s.status === "Reserved" && s.materialCode === code) ? a + (Number(s.qty) || 0) : a;
+    }, 0);
+  }
+  function availableOf(code) { return Math.max(0, Engine.round4(sohOf(code) - allocatedOf(code))); }
+  /* Chronological ledger for one material with a running balance (Kartu Stock). */
+  function ledgerFor(code) {
+    var rows = db.inventoryTxns.filter(function (t) { return t.materialCode === code; })
+      .slice().sort(function (a, b) {
+        var d = String(a.txnAt || "").localeCompare(String(b.txnAt || ""));
+        return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
+      });
+    var bal = openingOf(code);
+    return rows.map(function (t) { bal = Engine.round4(bal + (Number(t.qty) || 0)); return { txn: t, balance: bal }; });
+  }
+  function postTxn(t) {
+    var m = matMap()[t.materialCode] || null;
+    var rec = {
+      id: t.id || uid("TXN"), txnType: t.txnType || "ADJUST",
+      materialCode: t.materialCode || "", materialName: t.materialName || (m ? m.name : "") || "",
+      lotId: t.lotId || "", woId: t.woId || "",
+      qty: Number(t.qty) || 0, uom: t.uom || (m ? m.unit : "") || "",
+      refType: t.refType || "", refId: t.refId || "", note: t.note || "",
+      txnAt: t.txnAt || Engine.nowWIB()
+    };
+    db.inventoryTxns.unshift(rec);
+    if (m) m.stockQty = Engine.round4((Number(m.stockQty) || 0) + rec.qty);
+    if (window.Sync) { Sync.mark("t_inventory_txn", rec.id); if (m) Sync.mark("materials", m.code); }
+    return rec;
+  }
+
+  /* ---------- purchase order (FR-PP-14) ---------- */
+  function poById(id) { return db.purchaseOrders.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  /* Raise one PO from a set of Open PR lines (normally a single supplier). */
+  function createPoFromPr(prIds, opts) {
+    opts = opts || {};
+    var date = opts.date || Engine.todayISO();
+    var mm = matMap();
+    var poNo = Engine.noRequest("PO", nextSeq("po"), date);
+    var count = 0;
+    (prIds || []).forEach(function (pid) {
+      var pr = db.purchaseReqs.filter(function (r) { return String(r.id) === String(pid); })[0];
+      if (!pr) return;
+      var m = mm[pr.materialCode] || {};
+      var rec = {
+        id: uid("PO"), poNo: poNo, prId: pr.id,
+        supplier: opts.supplier || pr.supplier || m.supplier || "",
+        materialCode: pr.materialCode, materialName: pr.materialName || m.name || "",
+        qty: Number(pr.qty) || 0, receivedQty: 0,
+        unitPrice: Number((opts.prices || {})[pr.id]) || 0,
+        unit: pr.unit || m.unit || "",
+        leadDays: Number(opts.leadDays != null ? opts.leadDays : (m.leadDays || 0)) || 0,
+        eta: opts.eta || "", status: "Open", note: opts.note || ""
+      };
+      db.purchaseOrders.unshift(rec);
+      if (window.Sync) Sync.mark("t_purchase_order", rec.id);
+      if (pr.status === "Open") { pr.status = "Ordered"; if (window.Sync) Sync.mark("t_purchase_req", pr.id); }
+      count++;
+    });
+    audit("CREATE", "Purchase Order", poNo + " - " + count + " line(s)" + (opts.supplier ? " from " + opts.supplier : ""));
+    save();
+    return { poNo: poNo, count: count };
+  }
+  function savePurchaseOrder(rec, isNew, oldId) {
+    replaceRow(db.purchaseOrders, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Purchase Order", rec.poNo + " - " + rec.materialCode + " x " + Engine.fmtNum(rec.qty, 2) + " [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_purchase_order", oldId, "delete"); Sync.mark("t_purchase_order", rec.id); }
+    save(); return rec;
+  }
+  /* Receive (part of) a PO line: creates a Quarantine lot + a RECEIPT txn. */
+  function receivePoLine(poId, data) {
+    var po = poById(poId); if (!po) return null;
+    data = data || {};
+    var qty = Number(data.qty) || 0;
+    if (qty <= 0) return null;
+    var mm = matMap()[po.materialCode] || {};
+    var lot = {
+      id: uid("LOT"), lotNo: data.lotNo || "", materialCode: po.materialCode,
+      materialName: po.materialName || mm.name || "", poId: po.id,
+      qty: qty, qtyReceived: qty, uom: po.unit || mm.unit || "",
+      receivedAt: data.receivedAt || Engine.todayISO(),
+      coaRef: data.coaRef || "", halalRef: data.halalRef || "", msdsRef: data.msdsRef || "",
+      expiry: data.expiry || "", status: "Quarantine", note: data.note || ""
+    };
+    db.inventoryLots.unshift(lot);
+    if (window.Sync) Sync.mark("t_inventory_lot", lot.id);
+    postTxn({ txnType: "RECEIPT", materialCode: po.materialCode, materialName: lot.materialName,
+      lotId: lot.id, qty: qty, uom: lot.uom, refType: "PO", refId: po.id,
+      note: "Receipt " + po.poNo + (lot.lotNo ? " lot " + lot.lotNo : "") });
+    po.receivedQty = Engine.round4((Number(po.receivedQty) || 0) + qty);
+    po.status = po.receivedQty >= (Number(po.qty) || 0) ? "Closed" : "Partial";
+    if (window.Sync) Sync.mark("t_purchase_order", po.id);
+    audit("RECEIPT", "Inventory Lot", po.materialCode + " + " + Engine.fmtNum(qty, 2) + " " + lot.uom +
+      " (" + (lot.lotNo || "no lot") + ") against " + po.poNo + " - Quarantine");
+    save();
+    return lot;
+  }
+
+  /* ---------- inventory lot + QA release gate ---------- */
+  function lotById(id) { return db.inventoryLots.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function saveLot(rec, isNew, oldId) {
+    replaceRow(db.inventoryLots, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Inventory Lot", (rec.lotNo || rec.id) + " " + rec.materialCode + " [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_inventory_lot", oldId, "delete"); Sync.mark("t_inventory_lot", rec.id); }
+    save(); return rec;
+  }
+  /* QA disposition. Reject pulls the lot out of stock via an ADJUST. */
+  function setLotStatus(id, status) {
+    var lot = lotById(id); if (!lot) return false;
+    var ok = window.RBAC ? RBAC.canTransition("lot", lot.status, status) : false;
+    if (!ok) { audit("DENY", "Inventory Lot", (lot.lotNo || id) + " - " + lot.status + " \u2192 " + status + " not allowed"); save(); return false; }
+    var from = lot.status; lot.status = status;
+    if (status === "Rejected" && (Number(lot.qty) || 0) > 0) {
+      postTxn({ txnType: "ADJUST", materialCode: lot.materialCode, materialName: lot.materialName,
+        lotId: lot.id, qty: -(Number(lot.qty) || 0), uom: lot.uom, refType: "QA", refId: lot.id,
+        note: "QA rejected lot " + (lot.lotNo || id) });
+      lot.qty = 0;
+    }
+    audit("TRANSITION", "Inventory Lot", (lot.lotNo || id) + " " + lot.materialCode + " - " + from + " \u2192 " + status);
+    if (window.Sync) Sync.mark("t_inventory_lot", lot.id);
+    save(); return true;
+  }
+  function reservedOnLot(lotId) {
+    return db.stagings.reduce(function (a, s) {
+      return (s.status === "Reserved" && String(s.lotId) === String(lotId)) ? a + (Number(s.qty) || 0) : a;
+    }, 0);
+  }
+  /* Released lots with free stock, oldest first (FIFO picking). */
+  function releasedLots(code) {
+    return db.inventoryLots.filter(function (l) {
+      return l.materialCode === code && l.status === "Released" && (Number(l.qty) || 0) > 0;
+    }).sort(function (a, b) {
+      var d = String(a.receivedAt || "").localeCompare(String(b.receivedAt || ""));
+      return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
+    });
+  }
+  /* Greedy FIFO allocation of `qty` across Released lots (net of reservations). */
+  function fifoPick(code, qty) {
+    var need = Number(qty) || 0, picks = [];
+    if (need > 0) {
+      releasedLots(code).forEach(function (l) {
+        if (need <= 0) return;
+        var free = Math.max(0, Engine.round4((Number(l.qty) || 0) - reservedOnLot(l.id)));
+        var take = Math.min(need, free);
+        if (take > 0) {
+          picks.push({ lotId: l.id, lotNo: l.lotNo, materialCode: code, materialName: l.materialName, qty: Engine.round4(take), uom: l.uom });
+          need = Engine.round4(need - take);
+        }
+      });
+    }
+    return { picks: picks, short: Engine.round4(Math.max(0, need)) };
+  }
+
+  /* ---------- staging pick lists (FR-PP-01 / FR-PP-04 / FR-PP-10) ---------- */
+  function stagingById(id) { return db.stagings.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function createStaging(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var stagingNo = "STG/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("staging"), 3);
+    var count = 0;
+    (inp.picks || []).forEach(function (p) {
+      var m = matMap()[p.materialCode] || {};
+      var lot = lotById(p.lotId);
+      var rec = {
+        id: uid("STG"), stagingNo: stagingNo, docType: inp.docType || "FR-PP-01",
+        woId: inp.woId || "", campaignNo: inp.campaignNo || "", fgId: inp.fgId || "",
+        materialCode: p.materialCode, materialName: p.materialName || m.name || (lot ? lot.materialName : "") || "",
+        lotId: p.lotId || "", lotNo: p.lotNo || (lot ? lot.lotNo : "") || "",
+        qty: Number(p.qty) || 0, uom: p.uom || m.unit || "",
+        status: "Reserved", weighedBy: "", weighedAt: "", note: p.note || ""
+      };
+      db.stagings.unshift(rec);
+      if (window.Sync) Sync.mark("t_staging", rec.id);
+      count++;
+    });
+    audit("CREATE", "Staging", stagingNo + " (" + (inp.docType || "FR-PP-01") + ") - " + count + " line(s)" + (inp.campaignNo ? " for " + inp.campaignNo : ""));
+    save();
+    return { stagingNo: stagingNo, count: count };
+  }
+  /* Dispense one staged line: post the ISSUE and decrement the lot. */
+  function dispenseStaging(id, weighedBy) {
+    var s = stagingById(id); if (!s || s.status !== "Reserved") return false;
+    s.status = "Dispensed";
+    s.weighedBy = weighedBy || db.meta.user.email || db.meta.user.name || "";
+    s.weighedAt = Engine.nowWIB();
+    var lot = lotById(s.lotId);
+    if (lot) { lot.qty = Engine.round4(Math.max(0, (Number(lot.qty) || 0) - (Number(s.qty) || 0))); if (window.Sync) Sync.mark("t_inventory_lot", lot.id); }
+    postTxn({ txnType: "ISSUE", materialCode: s.materialCode, materialName: s.materialName,
+      lotId: s.lotId, woId: s.woId, qty: -(Number(s.qty) || 0), uom: s.uom,
+      refType: "STAGING", refId: s.id, note: "Staging " + s.stagingNo + (s.lotNo ? " lot " + s.lotNo : "") });
+    if (window.Sync) Sync.mark("t_staging", s.id);
+    audit("ISSUE", "Staging", s.materialCode + " - " + Engine.fmtNum(s.qty, 2) + " " + s.uom + " dispensed from " + s.stagingNo);
+    save(); return true;
+  }
+  function cancelStaging(id) {
+    var s = stagingById(id); if (!s || s.status !== "Reserved") return false;
+    s.status = "Cancelled";
+    if (window.Sync) Sync.mark("t_staging", s.id);
+    audit("CANCEL", "Staging", s.stagingNo + " " + s.materialCode + " reservation cancelled");
+    save(); return true;
+  }
+
   /* ---------- Simulation & requests ---------- */
   function saveSim(rec) {
     db.sims.unshift(rec);
@@ -564,6 +788,12 @@ window.Store = (function () {
     saveBOM: saveBOM, deleteBOM: deleteBOM,
     soById: soById, saveSalesOrder: saveSalesOrder, transitionSO: transitionSO, deleteSalesOrder: deleteSalesOrder,
     savePpicRun: savePpicRun,
+    txnById: txnById, netLedger: netLedger, sohOf: sohOf, openingOf: openingOf,
+    allocatedOf: allocatedOf, availableOf: availableOf, ledgerFor: ledgerFor, postTxn: postTxn,
+    poById: poById, createPoFromPr: createPoFromPr, savePurchaseOrder: savePurchaseOrder, receivePoLine: receivePoLine,
+    lotById: lotById, saveLot: saveLot, setLotStatus: setLotStatus,
+    reservedOnLot: reservedOnLot, releasedLots: releasedLots, fifoPick: fifoPick,
+    stagingById: stagingById, createStaging: createStaging, dispenseStaging: dispenseStaging, cancelStaging: cancelStaging,
     saveSim: saveSim, saveRequest: saveRequest,
     exportJSON: exportJSON, importJSON: importJSON, resetToSample: resetToSample,
     importMasterCSV: importMasterCSV, exportMasterCSV: exportMasterCSV

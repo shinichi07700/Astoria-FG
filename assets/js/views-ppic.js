@@ -154,7 +154,7 @@ window.ViewsPpic = (function () {
       var m = matMap[code] || {};
       return {
         name: m.name || ("(unknown " + code + ")"), unit: unit || m.unit || "",
-        soh: Number(m.stockQty) || 0, allocated: 0,
+        soh: Number(m.stockQty) || 0, allocated: Store.allocatedOf ? Store.allocatedOf(code) : 0,
         moq: Number(m.moq) || 0, leadDays: Number(m.leadDays) || 0
       };
     }

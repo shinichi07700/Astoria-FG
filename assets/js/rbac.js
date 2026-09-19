@@ -44,6 +44,14 @@ window.RBAC = (function () {
   var SO_EDITORS = ["Marketing"];
   var PPIC_PLANNERS = ["PPIC"];
 
+  /* Phase 3 warehouse / purchasing gates (they mirror the STATES transitions):
+     Purchasing raises a PO from a PR, Warehouse/Purchasing receive goods,
+     QA dispositions a quarantine lot, Warehouse/Production stage & dispense. */
+  var PURCHASERS = ["Purchasing"];
+  var RECEIVERS = ["Warehouse", "Purchasing"];
+  var QA_RELEASE = ["QA"];
+  var STAGERS = ["Warehouse", "Production"];
+
   /* ---------- state machine ----------
      statuses      : the only legal values of the document status
      transitions   : allowed hops with the roles that may sign them off
@@ -138,6 +146,10 @@ window.RBAC = (function () {
   }
   function canEditSO() { return isAdmin() || SO_EDITORS.indexOf(role()) >= 0; }
   function canPlan() { return isAdmin() || PPIC_PLANNERS.indexOf(role()) >= 0; }
+  function canPurchase() { return isAdmin() || PURCHASERS.indexOf(role()) >= 0; }
+  function canReceive() { return isAdmin() || RECEIVERS.indexOf(role()) >= 0; }
+  function canReleaseLot() { return isAdmin() || QA_RELEASE.indexOf(role()) >= 0; }
+  function canStage() { return isAdmin() || STAGERS.indexOf(role()) >= 0; }
   function canTransition(entity, from, to) {
     var e = STATES[entity];
     if (!e) return false;
@@ -159,9 +171,11 @@ window.RBAC = (function () {
   return {
     ROLES: ROLES, FG_EDITOR_ROLES: FG_EDITOR_ROLES, FG_FIELD_RIGHTS: FG_FIELD_RIGHTS,
     MASTER_EDITORS: MASTER_EDITORS, SO_EDITORS: SO_EDITORS, PPIC_PLANNERS: PPIC_PLANNERS, STATES: STATES,
+    PURCHASERS: PURCHASERS, RECEIVERS: RECEIVERS, QA_RELEASE: QA_RELEASE, STAGERS: STAGERS,
     SETTINGS_ADMIN_ONLY_IN_CLOUD: SETTINGS_ADMIN_ONLY_IN_CLOUD,
     role: role, isAdmin: isAdmin, canEditFG: canEditFG, fgRights: fgRights,
     canEditMaster: canEditMaster, canEditSO: canEditSO, canPlan: canPlan, canTransition: canTransition,
+    canPurchase: canPurchase, canReceive: canReceive, canReleaseLot: canReleaseLot, canStage: canStage,
     transitionsFrom: transitionsFrom, lockedGroups: lockedGroups
   };
 })();
