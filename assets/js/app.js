@@ -7,6 +7,9 @@ window.App = (function () {
     { id: "dashboard", label: "Dashboard", group: "Overview" },
     { id: "fg", label: "Master F/G", group: "Master Data" },
     { id: "materials", label: "Master Material", group: "Master Data" },
+    { id: "customers", label: "Master Customer", group: "Master Data" },
+    { id: "formulas", label: "Master Formula", group: "Master Data" },
+    { id: "packagings", label: "Master Packaging", group: "Master Data" },
     { id: "bom", label: "Bill of Material", group: "PPIC" },
     { id: "sim", label: "Order Simulation", group: "PPIC" },
     { id: "requests", label: "MR / PR Documents", group: "PPIC" },
@@ -17,6 +20,9 @@ window.App = (function () {
     dashboard: function (r) { ViewsMaster.dashboard(r); },
     fg: function (r) { ViewsMaster.fg(r); },
     materials: function (r) { ViewsMaster.materials(r); },
+    customers: function (r) { ViewsMaster.customers(r); },
+    formulas: function (r) { ViewsMaster.formulas(r); },
+    packagings: function (r) { ViewsMaster.packagings(r); },
     bom: function (r) { ViewsBom.list(r); },
     sim: function (r) { ViewsSim.sim(r); },
     requests: function (r) { ViewsSim.requests(r); },
@@ -115,6 +121,10 @@ window.App = (function () {
 
   function finishBoot() {
     document.body.classList.remove("login-mode");
+    /* Regulatory gate: once per day, recompute NA-expiry statuses and log
+       every Aktif -> Non Aktif lapse before the dashboard renders so the
+       watchlist + activity feed show the flip immediately. */
+    Store.runExpiryAudit();
     updateUserChip();
     updateSyncChip();
     renderNav();

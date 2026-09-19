@@ -60,6 +60,55 @@ window.Store = (function () {
     });
   }
 
+  /* ---------- Regulatory gate: boot-time NA expiry auditor ----------
+     Recomputes every F/G status from its BPOM (NA) expiry date once per
+     day and writes an audit entry whenever a SKU lapses Aktif -> Non Aktif.
+     The dashboard watchlist reads the same statuses, so it reflects the flip
+     on the very next render. The per-day baseline lives in db.meta (local
+     only, carried across cloud hydrate by sync.js) and the run is gated by a
+     WIB calendar-day key so repeated boots on the same day never spam. */
+  function runExpiryAudit() {
+    var today = Engine.todayISO();
+    db.meta.lastExpiryAudit = db.meta.lastExpiryAudit || "";
+    db.meta.fgStatus = db.meta.fgStatus || {};
+    if (db.meta.lastExpiryAudit === today) return 0;   /* already audited today */
+
+    var todayMs = Engine.parseDate(today).getTime();
+    var prev = db.meta.fgStatus, alive = {}, flips = 0;
+    db.fgs.forEach(function (f) {
+      alive[f.id] = 1;
+      var next = Engine.evaluateStatus(f.ffs, f.fps, f.kodeNA, f.tglExpire, f.discontinue);
+      f.status = next;                                  /* keep working copy fresh */
+      var before = prev[f.id];
+      prev[f.id] = next;
+      /* Only an expiry-driven Aktif -> Non Aktif lapse is a regulatory flip;
+         a manual discontinue already carries its own audit entry. */
+      if (before !== "Aktif" || next !== "Non Aktif" || f.discontinue) return;
+      var d = Engine.parseDate(f.tglExpire);
+      if (!d || d.getTime() >= todayMs) return;
+      var head = f.kodeFG + " (";
+      var dup = db.audit.some(function (a) {
+        return a.action === "EXPIRE" && a.entity === "Master F/G" &&
+          a.ts && a.ts.slice(0, 10) === today && String(a.detail).indexOf(head) === 0;
+      });
+      if (dup) return;
+      db.audit.unshift({
+        ts: Engine.nowWIB(), user: "system", role: "Regulatory gate",
+        action: "EXPIRE", entity: "Master F/G",
+        detail: head + f.deskripsi + ") - NA " + (f.kodeNA || "-") + " expired " +
+          Engine.toISO(f.tglExpire) + "; status Aktif \u2192 Non Aktif (auto)"
+      });
+      flips++;
+      if (window.Sync && Sync.enabled()) Sync.markAudit();
+    });
+    /* prune snapshot rows for deleted SKUs so it cannot grow unbounded */
+    Object.keys(prev).forEach(function (id) { if (!alive[id]) delete prev[id]; });
+    if (db.audit.length > 1000) db.audit.length = 1000;
+    db.meta.lastExpiryAudit = today;
+    save();
+    return flips;
+  }
+
   function audit(action, entity, detail) {
     db.audit.unshift({
       ts: Engine.nowWIB(),
@@ -367,7 +416,7 @@ window.Store = (function () {
 
   return {
     load: load, get: get, save: save, hydrate: hydrate, setUser: setUser,
-    refreshDerived: refreshDerived,
+    refreshDerived: refreshDerived, runExpiryAudit: runExpiryAudit,
     audit: audit, nextSeq: nextSeq, uid: uid,
     matMap: matMap, fgById: fgById, bomByFg: bomByFg,
     fgCompare: fgCompare, fgRecentCompare: fgRecentCompare, fgDescCompare: fgDescCompare,

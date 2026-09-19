@@ -504,6 +504,353 @@ window.ViewsMaster = (function () {
     });
   }
 
+  /* ---------------- Master Customer ----------------
+     Customers own finished-good brands and (from Phase 2) raise sales orders.
+     Maintained by Marketing; every other role sees a read-only list. */
+  var custFilter = { q: "" };
+
+  function customers(root) {
+    var db = Store.get();
+    var canEdit = RBAC.canEditMaster("customers");
+    root.appendChild(UI.pageHead("Master Customer",
+      "Customer / brand owners referenced by the production BOM and, from Phase 2, by Sales Orders. Maintained by Marketing.",
+      canEdit ? [UI.btn("+ New Customer", function () { custEditor(null); }, "btn-primary")] : []));
+
+    var search = UI.input({ placeholder: "Search code / name / PIC...", value: custFilter.q });
+    search.addEventListener("input", function () { custFilter.q = search.value; draw(); });
+    var bodyWrap = UI.el("div");
+    function draw() {
+      UI.clear(bodyWrap);
+      var q = custFilter.q.toLowerCase();
+      var rows = db.customers.filter(function (c) {
+        if (!q) return true;
+        return (c.id + " " + (c.name || "") + " " + (c.pic || "")).toLowerCase().indexOf(q) >= 0;
+      }).sort(function (a, b) {
+        return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+      });
+      var cols = [
+        { label: "Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
+        { label: "Name", key: "name" },
+        { label: "PIC", render: function (r) { return Engine.esc(r.pic || "-"); } },
+        { label: "Contact", render: function (r) { return Engine.esc(r.contact || "-"); } },
+        { label: "Terms", render: function (r) { return Engine.esc(r.terms || "-"); } },
+        { label: "Address", render: function (r) { return Engine.esc(r.address || "-"); } }
+      ];
+      if (canEdit) cols.push({ label: "", render: function (r) {
+        return UI.el("div", { class: "btn-row" }, [
+          UI.btn("Edit", function () { custEditor(r); }, "btn-sm"),
+          UI.btn("Delete", function () {
+            UI.confirmDialog("Delete customer " + r.id + " (" + (r.name || "") + ")? BOMs keep their text reference.", function () {
+              Store.deleteCustomer(r.id); App.refresh();
+            });
+          }, "btn-danger btn-sm")
+        ]);
+      } });
+      bodyWrap.appendChild(UI.table(cols, rows, { emptyText: "No customer yet. Create the first one." }));
+    }
+    var card = UI.el("section", { class: "card" });
+    card.appendChild(UI.el("div", { class: "toolbar" }, [search, UI.el("div", { class: "spacer" }),
+      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.customers.length + " customers" })]));
+    card.appendChild(UI.el("div", { class: "card-body tight" }, [bodyWrap]));
+    root.appendChild(card);
+    draw();
+    if (!canEdit) root.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
+      text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the customer master is maintained by Marketing." }));
+  }
+
+  function custEditor(rec) {
+    if (!RBAC.canEditMaster("customers")) { UI.toast("Customer master is read-only for your role", "err"); return; }
+    var isNew = !rec;
+    var d = Object.assign({ id: "", name: "", address: "", pic: "", contact: "", terms: "" }, rec || {});
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. CUST-001" });
+    var iName = UI.input({ value: d.name, placeholder: "Customer / brand owner" });
+    var iPic = UI.input({ value: d.pic, placeholder: "Person in charge" });
+    var iContact = UI.input({ value: d.contact, placeholder: "Phone / email" });
+    var iTerms = UI.input({ value: d.terms, placeholder: "e.g. TOP 30 days" });
+    var iAddr = UI.el("textarea", { class: "input", rows: "2", style: "width:100%", placeholder: "Billing / shipping address" });
+    iAddr.value = d.address || "";
+    var body = UI.el("div", {}, [
+      UI.el("div", { class: "form-grid" }, [
+        UI.field("Customer Code", iCode),
+        UI.field("Name", iName),
+        UI.field("PIC", iPic),
+        UI.field("Contact", iContact),
+        UI.field("Terms", iTerms)
+      ]),
+      UI.field("Address", iAddr)
+    ]);
+    UI.modal({
+      title: isNew ? "New Customer" : "Edit Customer - " + rec.id,
+      body: body,
+      actions: [{
+        label: "Save Customer", cls: "btn-primary", onClick: function () {
+          d.id = iCode.value.trim(); d.name = iName.value.trim(); d.pic = iPic.value.trim();
+          d.contact = iContact.value.trim(); d.terms = iTerms.value.trim(); d.address = iAddr.value.trim();
+          if (!d.id || !d.name) { UI.toast("Customer code and name are required", "err"); return; }
+          if (isNew && Store.customerById(d.id)) { UI.toast("Customer code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.customerById(d.id)) { UI.toast("Customer code already exists", "err"); return; }
+          Store.saveCustomer(d, isNew, rec ? rec.id : null);
+          UI.closeModal(); App.refresh();
+          UI.toast("Customer " + d.id + " saved", "ok");
+        }
+      }]
+    });
+  }
+
+  /* ---------------- shared bits for the pipeline masters ---------------- */
+  /* Customer picker used by the formula / packaging editors. Value is the
+     customer id (m_customer pk); the label shows the human name. */
+  function customerCombo(value) {
+    var db = Store.get();
+    var opts = [["", "(no customer)"]].concat(db.customers.map(function (c) {
+      return [c.id, (c.name || c.id) + (c.id ? "  (" + c.id + ")" : "")];
+    }));
+    if (value && !db.customers.some(function (c) { return c.id === value; })) {
+      opts.push([value, value + "  (not in master)"]);
+    }
+    return UI.combo(opts, value || "", "Type to search customer...");
+  }
+  function customerName(id) {
+    var c = id ? Store.customerById(id) : null;
+    return c ? (c.name || c.id) : "";
+  }
+  var STAB_OPTS = [["-", "- (not set)"], ["Running", "Running"], ["Pass", "Pass"], ["Fail", "Fail"]];
+  function stabTag(v) {
+    var map = { "Pass": ["#1a7f4b", "#e7f6ee"], "Fail": ["#b42318", "#fdeceb"], "Running": ["#9a6b00", "#fff5e0"] };
+    var c = map[v] || ["var(--muted)", "transparent"];
+    return UI.el("span", { class: "tag", style: "color:" + c[0] + ";background:" + c[1], text: v || "-" });
+  }
+
+  /* ---------------- Master Formula (FFS, FR-RD-09) ----------------
+     Bulk formula parameters on the 100% ratio basis: kategori, customer,
+     urutan, BJ, pH range, viscosity and the four stability tests. The recipe
+     percentages themselves live on the production BOM's FORMULA lines. */
+  var formulaFilter = { q: "" };
+
+  function formulas(root) {
+    var db = Store.get();
+    var canEdit = RBAC.canEditMaster("formulas");
+    root.appendChild(UI.pageHead("Master Formula (FFS)",
+      "Bulk formula parameters (form FR-RD-09): specific gravity, pH range, viscosity and the TK / TKUL / T50 / TM stability tests. Maintained by RND Formula; the recipe percentages are entered on each production BOM.",
+      canEdit ? [UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary")] : []));
+    var search = UI.input({ placeholder: "Search FFS code / kategori / viscosity...", value: formulaFilter.q });
+    search.addEventListener("input", function () { formulaFilter.q = search.value; draw(); });
+    var bodyWrap = UI.el("div");
+    function draw() {
+      UI.clear(bodyWrap);
+      var q = formulaFilter.q.toLowerCase();
+      var rows = db.formulas.filter(function (f) {
+        if (!q) return true;
+        return (f.id + " " + (f.kategori || "") + " " + (f.viscosity || "") + " " + customerName(f.customerId)).toLowerCase().indexOf(q) >= 0;
+      }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+      var cols = [
+        { label: "FFS Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
+        { label: "Kategori", render: function (r) { return Engine.esc(r.kategori || "-"); } },
+        { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
+        { label: "BJ", cls: "num", render: function (r) { return Engine.fmtNum(r.bj); } },
+        { label: "pH", cls: "num", render: function (r) {
+          var a = r.phMin === "" || r.phMin == null ? "" : r.phMin;
+          var b = r.phMax === "" || r.phMax == null ? "" : r.phMax;
+          return (a === "" && b === "") ? "<span class='row-muted'>-</span>" : Engine.esc(a + (b !== "" && b !== a ? " - " + b : ""));
+        } },
+        { label: "Viscosity", render: function (r) { return Engine.esc(r.viscosity || "-"); } },
+        { label: "Stability (TK / TKUL / T50 / TM)", render: function (r) {
+          return UI.el("div", { class: "btn-row", style: "gap:3px" }, [stabTag(r.stabTk), stabTag(r.stabTkul), stabTag(r.stabT50), stabTag(r.stabTm)]);
+        } },
+        { label: "", render: function (r) {
+          if (!canEdit) return "";
+          return UI.el("div", { class: "btn-row" }, [
+            UI.btn("Edit", function () { formulaEditor(r); }, "btn-sm"),
+            UI.btn("Delete", function () {
+              UI.confirmDialog("Delete formula " + r.id + "? BOMs referencing it keep a dangling link.", function () {
+                Store.deleteFormula(r.id); App.refresh();
+              });
+            }, "btn-danger btn-sm")
+          ]);
+        } }
+      ];
+      bodyWrap.appendChild(UI.table(cols, rows, { emptyText: "No formula yet. Create the first one." }));
+    }
+    var card = UI.el("section", { class: "card" });
+    card.appendChild(UI.el("div", { class: "toolbar" }, [search, UI.el("div", { class: "spacer" }),
+      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.formulas.length + " formulas" })]));
+    card.appendChild(UI.el("div", { class: "card-body tight" }, [bodyWrap]));
+    root.appendChild(card);
+    draw();
+    if (!canEdit) root.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
+      text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the formula master is maintained by RND Formula." }));
+  }
+
+  function formulaEditor(rec) {
+    if (!RBAC.canEditMaster("formulas")) { UI.toast("Formula master is read-only for your role", "err"); return; }
+    var isNew = !rec;
+    var d = Object.assign({ id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "",
+      viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-", note: "" }, rec || {});
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Urutan]" });
+    var iKat = UI.input({ value: d.kategori, placeholder: "e.g. Cream, Lotion, Serum" });
+    var iCust = customerCombo(d.customerId);
+    var iUrutan = UI.input({ type: "number", step: "1", min: "0", value: String(d.urutan || 0) });
+    var iBj = UI.input({ type: "number", step: "0.0001", min: "0", value: String(d.bj == null ? 1 : d.bj) });
+    var iPhMin = UI.input({ type: "number", step: "0.01", value: (d.phMin === "" || d.phMin == null) ? "" : String(d.phMin) });
+    var iPhMax = UI.input({ type: "number", step: "0.01", value: (d.phMax === "" || d.phMax == null) ? "" : String(d.phMax) });
+    var iVisc = UI.input({ value: d.viscosity, placeholder: "e.g. 20000 - 30000 cP" });
+    var iTk = UI.select(STAB_OPTS, d.stabTk || "-");
+    var iTkul = UI.select(STAB_OPTS, d.stabTkul || "-");
+    var iT50 = UI.select(STAB_OPTS, d.stabT50 || "-");
+    var iTm = UI.select(STAB_OPTS, d.stabTm || "-");
+    var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
+    iNote.value = d.note || "";
+    var body = UI.el("div", {}, [
+      UI.el("div", { class: "form-grid" }, [
+        UI.field("FFS Code", iCode, "Formula code, e.g. MR03-BN-01"),
+        UI.field("Kategori", iKat),
+        UI.field("Customer", iCust),
+        UI.field("Urutan", iUrutan),
+        UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss)."),
+        UI.field("Viscosity", iVisc)
+      ]),
+      fieldset("pH range", [UI.el("div", { class: "form-grid" }, [
+        UI.field("pH min", iPhMin, "Leave blank if not specified."),
+        UI.field("pH max", iPhMax)
+      ])]),
+      fieldset("Stability tests", [UI.el("div", { class: "form-grid" }, [
+        UI.field("TK (room temp)", iTk),
+        UI.field("TKUL (refrigerator)", iTkul),
+        UI.field("T50 (oven 50\u00b0C)", iT50),
+        UI.field("TM (sunlight)", iTm)
+      ])]),
+      UI.field("Note", iNote)
+    ]);
+    UI.modal({
+      title: isNew ? "New Formula (FFS)" : "Edit Formula - " + rec.id,
+      body: body, wide: true,
+      actions: [{
+        label: "Save Formula", cls: "btn-primary", onClick: function () {
+          d.id = iCode.value.trim(); d.kategori = iKat.value.trim(); d.customerId = iCust.value || "";
+          d.urutan = Number(iUrutan.value) || 0; d.bj = Number(iBj.value) || 0;
+          d.phMin = iPhMin.value === "" ? null : Number(iPhMin.value);
+          d.phMax = iPhMax.value === "" ? null : Number(iPhMax.value);
+          d.viscosity = iVisc.value.trim();
+          d.stabTk = iTk.value; d.stabTkul = iTkul.value; d.stabT50 = iT50.value; d.stabTm = iTm.value;
+          d.note = iNote.value.trim();
+          if (!d.id) { UI.toast("FFS code is required", "err"); return; }
+          if (!(d.bj > 0)) { UI.toast("BJ must be greater than 0", "err"); return; }
+          if (d.phMin != null && d.phMax != null && d.phMax < d.phMin) { UI.toast("pH max must be >= pH min", "err"); return; }
+          if (isNew && Store.formulaById(d.id)) { UI.toast("FFS code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("FFS code already exists", "err"); return; }
+          Store.saveFormula(d, isNew, rec ? rec.id : null);
+          UI.closeModal(); App.refresh();
+          UI.toast("Formula " + d.id + " saved", "ok");
+        }
+      }]
+    });
+  }
+
+  /* ---------------- Master Packaging (FPS, FR-PD-02 / SBK ST-PD-01) ----------------
+     Packaging parameters: fill volume range, shrink tunnel temperature and the
+     inkjet syntax. Component supply ownership (Customer vs Astoria) is set per
+     line on the production BOM's KEMAS section. */
+  var packFilter = { q: "" };
+
+  function packagings(root) {
+    var db = Store.get();
+    var canEdit = RBAC.canEditMaster("packagings");
+    root.appendChild(UI.pageHead("Master Packaging (FPS)",
+      "Packaging parameters (form FR-PD-02 / SBK ST-PD-01): fill volume range, shrink tunnel temperature and inkjet syntax. Maintained by RND Kemas; component supply ownership is set on each production BOM.",
+      canEdit ? [UI.btn("+ New Packaging", function () { packagingEditor(null); }, "btn-primary")] : []));
+    var search = UI.input({ placeholder: "Search FPS code / inkjet...", value: packFilter.q });
+    search.addEventListener("input", function () { packFilter.q = search.value; draw(); });
+    var bodyWrap = UI.el("div");
+    function draw() {
+      UI.clear(bodyWrap);
+      var q = packFilter.q.toLowerCase();
+      var rows = db.packagings.filter(function (p) {
+        if (!q) return true;
+        return (p.id + " " + (p.inkjetSyntax || "") + " " + customerName(p.customerId)).toLowerCase().indexOf(q) >= 0;
+      }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+      bodyWrap.appendChild(UI.table([
+        { label: "FPS Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
+        { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
+        { label: "Varian", cls: "num", render: function (r) { return String(r.urutanVarian || 0); } },
+        { label: "Rev", cls: "num", render: function (r) { return String(r.revisi || 0); } },
+        { label: "Fill (mL)", cls: "num", render: function (r) {
+          return Engine.fmtNum(r.fillMin) + (r.fillMax && r.fillMax !== r.fillMin ? " - " + Engine.fmtNum(r.fillMax) : "");
+        } },
+        { label: "Shrink (\u00b0C)", cls: "num", render: function (r) { return r.shrinkTunnelC ? Engine.fmtNum(r.shrinkTunnelC) : "-"; } },
+        { label: "Inkjet syntax", cls: "mono", render: function (r) { return Engine.esc(r.inkjetSyntax || "-"); } },
+        { label: "", render: function (r) {
+          if (!canEdit) return "";
+          return UI.el("div", { class: "btn-row" }, [
+            UI.btn("Edit", function () { packagingEditor(r); }, "btn-sm"),
+            UI.btn("Delete", function () {
+              UI.confirmDialog("Delete packaging " + r.id + "? BOMs referencing it keep a dangling link.", function () {
+                Store.deletePackaging(r.id); App.refresh();
+              });
+            }, "btn-danger btn-sm")
+          ]);
+        } }
+      ], rows, { emptyText: "No packaging yet. Create the first one." }));
+    }
+    var card = UI.el("section", { class: "card" });
+    card.appendChild(UI.el("div", { class: "toolbar" }, [search, UI.el("div", { class: "spacer" }),
+      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.packagings.length + " packagings" })]));
+    card.appendChild(UI.el("div", { class: "card-body tight" }, [bodyWrap]));
+    root.appendChild(card);
+    draw();
+    if (!canEdit) root.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
+      text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the packaging master is maintained by RND Kemas." }));
+  }
+
+  function packagingEditor(rec) {
+    if (!RBAC.canEditMaster("packagings")) { UI.toast("Packaging master is read-only for your role", "err"); return; }
+    var isNew = !rec;
+    var d = Object.assign({ id: "", customerId: "", urutanVarian: 0, revisi: 0, fillMin: 0, fillMax: 0,
+      shrinkTunnelC: 0, inkjetSyntax: "", note: "" }, rec || {});
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Varian]-[Rev]" });
+    var iCust = customerCombo(d.customerId);
+    var iVarian = UI.input({ type: "number", step: "1", min: "0", value: String(d.urutanVarian || 0) });
+    var iRev = UI.input({ type: "number", step: "1", min: "0", value: String(d.revisi || 0) });
+    var iFillMin = UI.input({ type: "number", step: "0.01", min: "0", value: String(d.fillMin || 0) });
+    var iFillMax = UI.input({ type: "number", step: "0.01", min: "0", value: String(d.fillMax || 0) });
+    var iShrink = UI.input({ type: "number", step: "1", min: "0", value: String(d.shrinkTunnelC || 0) });
+    var iInk = UI.input({ class: "input mono", value: d.inkjetSyntax, placeholder: "e.g. EXP {MM/YY} BATCH {NO}" });
+    var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
+    iNote.value = d.note || "";
+    var body = UI.el("div", {}, [
+      UI.el("div", { class: "form-grid" }, [
+        UI.field("FPS Code", iCode),
+        UI.field("Customer", iCust),
+        UI.field("Urutan varian", iVarian),
+        UI.field("Revisi", iRev),
+        UI.field("Fill min (mL)", iFillMin),
+        UI.field("Fill max (mL)", iFillMax),
+        UI.field("Shrink tunnel (\u00b0C)", iShrink),
+        UI.field("Inkjet syntax", iInk)
+      ]),
+      UI.field("Note", iNote)
+    ]);
+    UI.modal({
+      title: isNew ? "New Packaging (FPS)" : "Edit Packaging - " + rec.id,
+      body: body, wide: true,
+      actions: [{
+        label: "Save Packaging", cls: "btn-primary", onClick: function () {
+          d.id = iCode.value.trim(); d.customerId = iCust.value || "";
+          d.urutanVarian = Number(iVarian.value) || 0; d.revisi = Number(iRev.value) || 0;
+          d.fillMin = Number(iFillMin.value) || 0; d.fillMax = Number(iFillMax.value) || 0;
+          d.shrinkTunnelC = Number(iShrink.value) || 0; d.inkjetSyntax = iInk.value.trim();
+          d.note = iNote.value.trim();
+          if (!d.id) { UI.toast("FPS code is required", "err"); return; }
+          if (d.fillMax < d.fillMin) { UI.toast("Fill max must be >= fill min", "err"); return; }
+          if (isNew && Store.packagingById(d.id)) { UI.toast("FPS code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.packagingById(d.id)) { UI.toast("FPS code already exists", "err"); return; }
+          Store.savePackaging(d, isNew, rec ? rec.id : null);
+          UI.closeModal(); App.refresh();
+          UI.toast("Packaging " + d.id + " saved", "ok");
+        }
+      }]
+    });
+  }
+
   function pickFile(cb) {
     var inp = UI.el("input", { type: "file", accept: ".csv,text/csv,.json,application/json", style: "display:none" });
     document.body.appendChild(inp);
@@ -513,5 +860,6 @@ window.ViewsMaster = (function () {
     inp.click();
   }
 
-  return { dashboard: dashboard, fg: fg, materials: materials, CAT_LABEL: CAT_LABEL, ROLES: ROLES, pickFile: pickFile };
+  return { dashboard: dashboard, fg: fg, materials: materials, customers: customers,
+    formulas: formulas, packagings: packagings, CAT_LABEL: CAT_LABEL, ROLES: ROLES, pickFile: pickFile };
 })();

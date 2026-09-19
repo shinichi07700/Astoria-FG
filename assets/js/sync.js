@@ -37,6 +37,12 @@ window.Sync = (function () {
   }
   function pendingCount() { return Object.keys(pending).length + auditQueue + (replaceAll ? 1 : 0); }
   function missingTables() { return Object.keys(missing); }
+  /* Migration 002 adds m_customer/m_formula/m_packaging/m_mixer AND the
+     materials.moq/lead_days + boms.formula_id/packaging_id columns in one
+     shot. Until it runs those columns are absent, so the write-side row
+     mappers must omit them (PostgREST rejects unknown columns on upsert).
+     Presence of m_formula is the proxy for "002 applied". */
+  function has002() { return !missing["m_formula"]; }
 
   /* ---------- dirty tracking ---------- */
   function loadPending() {
@@ -77,11 +83,12 @@ window.Sync = (function () {
     };
   }
   function matRow(m) {
-    return {
+    var row = {
       code: m.code, name: m.name, category: m.category, unit: m.unit,
-      stock_qty: Number(m.stockQty) || 0, stocked: m.stocked !== false, supplier: m.supplier || "",
-      moq: Number(m.moq) || 0, lead_days: Number(m.leadDays) || 0
+      stock_qty: Number(m.stockQty) || 0, stocked: m.stocked !== false, supplier: m.supplier || ""
     };
+    if (has002()) { row.moq = Number(m.moq) || 0; row.lead_days = Number(m.leadDays) || 0; }
+    return row;
   }
   function matFrom(r) {
     return {
@@ -146,30 +153,34 @@ window.Sync = (function () {
     };
   }
   function bomRow(b) {
-    return {
+    var row = {
       id: b.id, no_bom: b.noBom, fg_id: b.fgId, revision: Number(b.revision) || 0,
       mulai_berlaku: b.mulaiBerlaku || "", customer: b.customer || "", no_customer: b.noCustomer || "",
       bulk_code: b.bulkCode || "", batch_size: b.batchSize || "",
-      batch_yield: Number(b.batchYield) || 0, status: b.status || "",
-      formula_id: b.formulaId || null, packaging_id: b.packagingId || null
+      batch_yield: Number(b.batchYield) || 0, status: b.status || ""
     };
+    if (has002()) { row.formula_id = b.formulaId || null; row.packaging_id = b.packagingId || null; row.customer_id = b.customerId || null; }
+    return row;
   }
   function bomFrom(r) {
     return {
       id: r.id, noBom: r.no_bom, fgId: r.fg_id, revision: r.revision,
       mulaiBerlaku: r.mulai_berlaku, customer: r.customer, noCustomer: r.no_customer,
       bulkCode: r.bulk_code, batchSize: r.batch_size, batchYield: Number(r.batch_yield) || 0,
-      status: r.status, formulaId: r.formula_id || "", packagingId: r.packaging_id || "", items: []
+      status: r.status, formulaId: r.formula_id || "", packagingId: r.packaging_id || "", customerId: r.customer_id || "", items: []
     };
   }
   function bomLineRows(b) {
+    var withPct = has002();
     return (b.items || []).map(function (it, i) {
-      return {
+      var row = {
         bom_id: b.id, sort: i, section: it.section, material_code: it.materialCode,
         qty_per_unit: Number(it.qtyPerUnit) || 0, qty_per_batch: Number(it.qtyPerBatch) || 0,
         unit: it.unit || "", supported_by: it.supportedBy || "",
         loss_pct: Number(it.lossPct) || 0, note: it.note || ""
       };
+      if (withPct) row.pct = Number(it.pct) || 0;
+      return row;
     });
   }
   function simRow(s) { return { id: s.id, no_sim: s.noSim, payload: s }; }
@@ -195,7 +206,7 @@ window.Sync = (function () {
           (byBom[l.bom_id] = byBom[l.bom_id] || []).push({
             section: l.section, materialCode: l.material_code,
             qtyPerUnit: Number(l.qty_per_unit) || 0, qtyPerBatch: Number(l.qty_per_batch) || 0,
-            unit: l.unit, supportedBy: l.supported_by, lossPct: Number(l.loss_pct) || 0, note: l.note
+            unit: l.unit, supportedBy: l.supported_by, lossPct: Number(l.loss_pct) || 0, pct: Number(l.pct) || 0, note: l.note
           });
         });
         db.boms.forEach(function (b) { b.items = byBom[b.id] || []; });
@@ -244,7 +255,11 @@ window.Sync = (function () {
           company: kv.company || (local.meta && local.meta.company) || "PT ASTORIA PRIMA",
           user: local.meta.user,
           seq: kv.seq || { bom: 0, mr: 0, pr: 0, sim: 0 },
-          expWarnDays: kv.expWarnDays != null ? kv.expWarnDays : 90
+          expWarnDays: kv.expWarnDays != null ? kv.expWarnDays : 90,
+          /* carry the regulatory-gate baseline across hydrate so the daily
+             expiry auditor can still spot Aktif -> Non Aktif flips */
+          lastExpiryAudit: local.meta.lastExpiryAudit || "",
+          fgStatus: local.meta.fgStatus || {}
         },
         audit: rows.audit_log.slice(0, 1000).map(function (r) {
           return { ts: r.ts, user: r.user_name, role: r.role, action: r.action, entity: r.entity, detail: r.detail };

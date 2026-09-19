@@ -5,7 +5,9 @@
 --  FR-PD-02 + SBK ST-PD-01) and the mixer catalogue used by the
 --  PPIC lot-sizing engine. Also extends materials with purchasing
 --  parameters (MOQ, lead time) and links production BOMs to their
---  formula / packaging masters.
+--  formula / packaging masters and customer. Recipe percentages live on
+--  bom_lines.pct (the 100% ratio basis); packaging supply ownership reuses
+--  the existing bom_lines.supported_by column.
 --
 --  Run ONCE in: Supabase Dashboard > SQL Editor (the anon key
 --  cannot execute DDL). Idempotent - safe to re-run.
@@ -95,6 +97,19 @@ alter table public.boms add column if not exists formula_id   text references pu
 alter table public.boms add column if not exists packaging_id text references public.m_packaging(id) on delete set null;
 create index if not exists boms_formula_idx   on public.boms (formula_id);
 create index if not exists boms_packaging_idx on public.boms (packaging_id);
+
+-- ---------- formula recipe ratio + BOM customer link (Phase 1) ----------
+-- Each FORMULA line carries its weight-ratio percentage; the editor enforces
+-- the section sums to exactly 100.00%. KEMAS supply ownership reuses the
+-- existing bom_lines.supported_by enum ('Customer' | 'Astoria').
+alter table public.bom_lines add column if not exists pct numeric not null default 0;
+alter table public.boms add column if not exists customer_id text references public.m_customer(id) on delete set null;
+create index if not exists boms_customer_idx on public.boms (customer_id);
+-- backfill the FK from the legacy free-text customer name / code
+update public.boms b set customer_id = c.id
+  from public.m_customer c
+  where b.customer_id is null and coalesce(b.customer, '') <> ''
+    and (c.name = b.customer or c.id = b.customer);
 
 -- ---------- RLS: same v1 policy as the baseline (staff read/write) ----------
 do $$
