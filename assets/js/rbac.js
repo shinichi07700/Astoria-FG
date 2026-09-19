@@ -52,6 +52,13 @@ window.RBAC = (function () {
   var QA_RELEASE = ["QA"];
   var STAGERS = ["Warehouse", "Production"];
 
+  /* Phase 4 QA/QC + production gates: QA signs line clearances (FR-QA-21/
+     22/23), IPC (FR-QA-25 / FR-QC-05) and the final release (FR-QC-06);
+     Production runs the BMR phases, BTIP transfers and packing. The
+     matching STATES transitions below carry the same roles. */
+  var QA_INSPECTORS = ["QA"];
+  var PRODUCERS = ["Production"];
+
   /* ---------- state machine ----------
      statuses      : the only legal values of the document status
      transitions   : allowed hops with the roles that may sign them off
@@ -150,6 +157,9 @@ window.RBAC = (function () {
   function canReceive() { return isAdmin() || RECEIVERS.indexOf(role()) >= 0; }
   function canReleaseLot() { return isAdmin() || QA_RELEASE.indexOf(role()) >= 0; }
   function canStage() { return isAdmin() || STAGERS.indexOf(role()) >= 0; }
+  function canInspect() { return isAdmin() || QA_INSPECTORS.indexOf(role()) >= 0; }
+  function canProduce() { return isAdmin() || PRODUCERS.indexOf(role()) >= 0; }
+  function canRelease() { return isAdmin() || QA_INSPECTORS.indexOf(role()) >= 0; }
   function canTransition(entity, from, to) {
     var e = STATES[entity];
     if (!e) return false;
@@ -172,10 +182,12 @@ window.RBAC = (function () {
     ROLES: ROLES, FG_EDITOR_ROLES: FG_EDITOR_ROLES, FG_FIELD_RIGHTS: FG_FIELD_RIGHTS,
     MASTER_EDITORS: MASTER_EDITORS, SO_EDITORS: SO_EDITORS, PPIC_PLANNERS: PPIC_PLANNERS, STATES: STATES,
     PURCHASERS: PURCHASERS, RECEIVERS: RECEIVERS, QA_RELEASE: QA_RELEASE, STAGERS: STAGERS,
+    QA_INSPECTORS: QA_INSPECTORS, PRODUCERS: PRODUCERS,
     SETTINGS_ADMIN_ONLY_IN_CLOUD: SETTINGS_ADMIN_ONLY_IN_CLOUD,
     role: role, isAdmin: isAdmin, canEditFG: canEditFG, fgRights: fgRights,
     canEditMaster: canEditMaster, canEditSO: canEditSO, canPlan: canPlan, canTransition: canTransition,
     canPurchase: canPurchase, canReceive: canReceive, canReleaseLot: canReleaseLot, canStage: canStage,
+    canInspect: canInspect, canProduce: canProduce, canRelease: canRelease,
     transitionsFrom: transitionsFrom, lockedGroups: lockedGroups
   };
 })();

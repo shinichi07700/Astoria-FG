@@ -326,6 +326,110 @@ window.Sync = (function () {
     };
   }
 
+  /* ---- Phase 4 QA gates + production execution (migration 005, v:5) ---- */
+  function lcRow(c) {
+    return {
+      id: c.id, clearance_no: c.clearanceNo || "", clearance_type: c.clearanceType || "FR-QA-21",
+      wo_type: c.woType || "Bulk", wo_id: c.woId || "", wo_ref: c.woRef || "", campaign_no: c.campaignNo || "",
+      checklist: c.checklist || [], status: c.status || "Open",
+      qc_signer: c.qcSigner || "", qc_time: c.qcTime || "", note: c.note || ""
+    };
+  }
+  function lcFrom(r) {
+    return {
+      id: r.id, clearanceNo: r.clearance_no || "", clearanceType: r.clearance_type || "FR-QA-21",
+      woType: r.wo_type || "Bulk", woId: r.wo_id || "", woRef: r.wo_ref || "", campaignNo: r.campaign_no || "",
+      checklist: r.checklist || [], status: r.status || "Open",
+      qcSigner: r.qc_signer || "", qcTime: r.qc_time || "", note: r.note || ""
+    };
+  }
+  function ipcRow(p) {
+    return {
+      id: p.id, ipc_no: p.ipcNo || "", ipc_type: p.ipcType || "FR-QA-25",
+      wo_id: p.woId || "", wo_ref: p.woRef || "", campaign_no: p.campaignNo || "", fg_id: p.fgId || null,
+      checks: p.checks || [], result: p.result || "Pass", inspector: p.inspector || "",
+      recorded_at: p.recordedAt || "", note: p.note || ""
+    };
+  }
+  function ipcFrom(r) {
+    return {
+      id: r.id, ipcNo: r.ipc_no || "", ipcType: r.ipc_type || "FR-QA-25",
+      woId: r.wo_id || "", woRef: r.wo_ref || "", campaignNo: r.campaign_no || "", fgId: r.fg_id || "",
+      checks: r.checks || [], result: r.result || "Pass", inspector: r.inspector || "",
+      recordedAt: r.recorded_at || "", note: r.note || ""
+    };
+  }
+  function phaseRow(p) {
+    return {
+      id: p.id, wo_id: p.woId || null, phase_no: Number(p.phaseNo) || 1, phase_name: p.phaseName || "",
+      material_code: p.materialCode || "", material_name: p.materialName || "",
+      theoretical_kg: Number(p.theoreticalKg) || 0, actual_kg: Number(p.actualKg) || 0,
+      vessel: p.vessel || "", homogenizer_hz: Number(p.homogenizerHz) || 0, temperature_c: Number(p.temperatureC) || 0,
+      started_at: p.startedAt || "", ended_at: p.endedAt || "", operator: p.operator || "", note: p.note || ""
+    };
+  }
+  function phaseFrom(r) {
+    return {
+      id: r.id, woId: r.wo_id || "", phaseNo: Number(r.phase_no) || 1, phaseName: r.phase_name || "",
+      materialCode: r.material_code || "", materialName: r.material_name || "",
+      theoreticalKg: Number(r.theoretical_kg) || 0, actualKg: Number(r.actual_kg) || 0,
+      vessel: r.vessel || "", homogenizerHz: Number(r.homogenizer_hz) || 0, temperatureC: Number(r.temperature_c) || 0,
+      startedAt: r.started_at || "", endedAt: r.ended_at || "", operator: r.operator || "", note: r.note || ""
+    };
+  }
+  function btipRow(b) {
+    return {
+      id: b.id, transfer_no: b.transferNo || "", wo_id: b.woId || null, campaign_no: b.campaignNo || "",
+      from_vessel: b.fromVessel || "", to_hopper: b.toHopper || "", bulk_code: b.bulkCode || "",
+      qty: Number(b.qty) || 0, uom: b.uom || "Kg", transferred_by: b.transferredBy || "", qa_by: b.qaBy || "",
+      transferred_at: b.transferredAt || "", status: b.status || "Draft", note: b.note || ""
+    };
+  }
+  function btipFrom(r) {
+    return {
+      id: r.id, transferNo: r.transfer_no || "", woId: r.wo_id || "", campaignNo: r.campaign_no || "",
+      fromVessel: r.from_vessel || "", toHopper: r.to_hopper || "", bulkCode: r.bulk_code || "",
+      qty: Number(r.qty) || 0, uom: r.uom || "Kg", transferredBy: r.transferred_by || "", qaBy: r.qa_by || "",
+      transferredAt: r.transferred_at || "", status: r.status || "Draft", note: r.note || ""
+    };
+  }
+  function wopRow(w) {
+    return {
+      id: w.id, wo_no: w.woNo || "", campaign_no: w.campaignNo || "", so_id: w.soId || null,
+      fg_id: w.fgId || null, bulk_wo_id: w.bulkWoId || null, bulk_code: w.bulkCode || "",
+      status: w.status || "Planned", theoretical_output: Number(w.theoreticalOutput) || 0,
+      rejects: Number(w.rejects) || 0, actual_yield: Number(w.actualYield) || 0, output_unit: w.outputUnit || "pcs",
+      labor_hours: Number(w.laborHours) || 0, machine_hours: Number(w.machineHours) || 0,
+      rendemen_pct: Number(w.rendemenPct) || 0, variance_remark: w.varianceRemark || "",
+      started_at: w.startedAt || "", done_at: w.doneAt || "", note: w.note || ""
+    };
+  }
+  function wopFrom(r) {
+    return {
+      id: r.id, woNo: r.wo_no || "", campaignNo: r.campaign_no || "", soId: r.so_id || "",
+      fgId: r.fg_id || "", bulkWoId: r.bulk_wo_id || "", bulkCode: r.bulk_code || "",
+      status: r.status || "Planned", theoreticalOutput: Number(r.theoretical_output) || 0,
+      rejects: Number(r.rejects) || 0, actualYield: Number(r.actual_yield) || 0, outputUnit: r.output_unit || "pcs",
+      laborHours: Number(r.labor_hours) || 0, machineHours: Number(r.machine_hours) || 0,
+      rendemenPct: Number(r.rendemen_pct) || 0, varianceRemark: r.variance_remark || "",
+      startedAt: r.started_at || "", doneAt: r.done_at || "", note: r.note || ""
+    };
+  }
+  function relRow(x) {
+    return {
+      id: x.id, release_no: x.releaseNo || "", wo_pack_id: x.woPackId || null, fg_id: x.fgId || null,
+      campaign_no: x.campaignNo || "", batch_lot: x.batchLot || "", disposition: x.disposition || "Pending",
+      qa_copy: x.qaCopy || "", qc_copy: x.qcCopy || "", signer: x.signer || "", released_at: x.releasedAt || "", note: x.note || ""
+    };
+  }
+  function relFrom(r) {
+    return {
+      id: r.id, releaseNo: r.release_no || "", woPackId: r.wo_pack_id || "", fgId: r.fg_id || "",
+      campaignNo: r.campaign_no || "", batchLot: r.batch_lot || "", disposition: r.disposition || "Pending",
+      qaCopy: r.qa_copy || "", qcCopy: r.qc_copy || "", signer: r.signer || "", releasedAt: r.released_at || "", note: r.note || ""
+    };
+  }
+
   /* ---------- table registry ----------
      v = migration that introduced the table (v > 1 may be absent).
      children = dependent rows re-pushed together with the parent.   */
@@ -360,7 +464,14 @@ window.Sync = (function () {
     { name: "t_purchase_order", pk: "id", key: "id", store: "purchaseOrders", v: 4, order: "created_at.desc", row: poRow, from: poFrom },
     { name: "t_inventory_lot", pk: "id", key: "id", store: "inventoryLots", v: 4, order: "created_at.desc", row: lotRow, from: lotFrom },
     { name: "t_inventory_txn", pk: "id", key: "id", store: "inventoryTxns", v: 4, order: "created_at.desc", row: txnRow, from: txnFrom },
-    { name: "t_staging", pk: "id", key: "id", store: "stagings", v: 4, order: "created_at.desc", row: stgRow, from: stgFrom }
+    { name: "t_staging", pk:"id", key:"id", store:"stagings", v:4, order:"created_at.desc", row:stgRow, from:stgFrom },
+    /* migration 005 - QA gates + production execution (pack before release: release FK -> pack) */
+    { name: "t_line_clearance", pk:"id", key:"id", store:"lineClearances", v:5, order:"created_at.desc", row:lcRow, from:lcFrom },
+    { name: "t_ipc_record", pk:"id", key:"id", store:"ipcRecords", v:5, order:"created_at.desc", row:ipcRow, from:ipcFrom },
+    { name: "t_wo_bulk_phase", pk:"id", key:"id", store:"woBulkPhases", v:5, order:"created_at.desc", row:phaseRow, from:phaseFrom },
+    { name: "t_btip_transfer", pk:"id", key:"id", store:"btipTransfers", v:5, order:"created_at.desc", row:btipRow, from:btipFrom },
+    { name: "t_work_order_pack", pk:"id", key:"id", store:"workOrdersPack", v:5, order:"created_at.desc", row:wopRow, from:wopFrom },
+    { name: "t_release", pk:"id", key:"id", store:"releases", v:5, order:"created_at.desc", row:relRow, from:relFrom }
   ];
   /* append-only / single-row tables stay hand-coded */
   var EXTRAS = [

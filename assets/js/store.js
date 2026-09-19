@@ -7,7 +7,7 @@ window.Store = (function () {
   var KEY = "astoria_fg_suite_v1";
   var db = null;
   /* document sequences used across the pipeline (FR-xx numbering) */
-  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign", "staging"];
+  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign", "staging", "wop", "lc", "ipc", "rel"];
   function fixSeq() {
     db.meta.seq = db.meta.seq || {};
     SEQ_KEYS.forEach(function (k) { if (db.meta.seq[k] == null) db.meta.seq[k] = 0; });
@@ -25,6 +25,12 @@ window.Store = (function () {
     db.inventoryLots = db.inventoryLots || [];
     db.inventoryTxns = db.inventoryTxns || [];
     db.stagings = db.stagings || [];
+    db.lineClearances = db.lineClearances || [];
+    db.ipcRecords = db.ipcRecords || [];
+    db.woBulkPhases = db.woBulkPhases || [];
+    db.btipTransfers = db.btipTransfers || [];
+    db.workOrdersPack = db.workOrdersPack || [];
+    db.releases = db.releases || [];
     db.sims = db.sims || [];
     db.requests = db.requests || [];
     db.audit = db.audit || [];
@@ -648,6 +654,239 @@ window.Store = (function () {
     save(); return true;
   }
 
+  /* ============================================================
+     PHASE 4 - QA/QC gates + production execution
+     ============================================================ */
+
+  /* ---------- line clearance (FR-QA-21/22/23) ----------
+     A QC-signed checklist that gates the next operation: FR-QA-21 gates
+     bulk mixing, FR-QA-22 gates packing, FR-QA-23 gates inkjet batch/ED.
+     The matching clearance must be Passed before the WO may start. */
+  function lcById(id) { return db.lineClearances.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function clearancesFor(woId) { return db.lineClearances.filter(function (c) { return String(c.woId) === String(woId); }); }
+  function clearancePassed(woId, type) {
+    return db.lineClearances.some(function (c) {
+      return String(c.woId) === String(woId) && c.clearanceType === type && c.status === "Passed";
+    });
+  }
+  function createLineClearance(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("LC"), clearanceNo: "LC/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("lc"), 3),
+      clearanceType: inp.clearanceType || "FR-QA-21", woType: inp.woType || "Bulk",
+      woId: inp.woId || "", woRef: inp.woRef || "", campaignNo: inp.campaignNo || "",
+      checklist: inp.checklist || [], status: "Open", qcSigner: "", qcTime: "", note: inp.note || ""
+    };
+    db.lineClearances.unshift(rec);
+    if (window.Sync) Sync.mark("t_line_clearance", rec.id);
+    audit("CREATE", "Line Clearance", rec.clearanceNo + " " + rec.clearanceType + " for " + (rec.woRef || rec.woId));
+    save(); return rec;
+  }
+  function saveLineClearance(rec, isNew, oldId) {
+    replaceRow(db.lineClearances, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Line Clearance", rec.clearanceNo + " " + rec.clearanceType + " [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_line_clearance", oldId, "delete"); Sync.mark("t_line_clearance", rec.id); }
+    save(); return rec;
+  }
+  function setClearanceStatus(id, status) {
+    var lc = lcById(id); if (!lc) return false;
+    var ok = window.RBAC ? RBAC.canTransition("lineClearance", lc.status, status) : false;
+    if (!ok) { audit("DENY", "Line Clearance", lc.clearanceNo + " - " + lc.status + " \u2192 " + status + " not allowed"); save(); return false; }
+    var from = lc.status; lc.status = status;
+    if (status !== "Open") { lc.qcSigner = db.meta.user.email || db.meta.user.name; lc.qcTime = Engine.nowWIB(); }
+    audit("TRANSITION", "Line Clearance", lc.clearanceNo + " " + lc.clearanceType + " - " + from + " \u2192 " + status);
+    if (window.Sync) Sync.mark("t_line_clearance", lc.id);
+    save(); return true;
+  }
+
+  /* ---------- IPC record (FR-QA-25 / FR-QC-05 / process) ----------
+     Checkpoints validated against limits on the formula/packaging
+     masters, resolved through the FG's production BOM. */
+  function ipcById(id) { return db.ipcRecords.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function ipcLimit(fgId, param) {
+    var bom = fgId ? bomByFg(fgId) : null; if (!bom) return null;
+    if (param === "ph") {
+      var fm = bom.formulaId ? formulaById(bom.formulaId) : null; if (!fm) return null;
+      var lo = (fm.phMin === "" || fm.phMin == null) ? null : Number(fm.phMin);
+      var hi = (fm.phMax === "" || fm.phMax == null) ? null : Number(fm.phMax);
+      return (lo == null && hi == null) ? null : { min: lo, max: hi, unit: "pH" };
+    }
+    if (param === "fill" || param === "weight") {
+      var pk = bom.packagingId ? packagingById(bom.packagingId) : null; if (!pk) return null;
+      return { min: Number(pk.fillMin) || 0, max: Number(pk.fillMax) || 0, unit: "ml" };
+    }
+    return null;
+  }
+  function checkPass(c) {
+    var v = Number(c.value);
+    if (isNaN(v)) return c.pass !== false;
+    if (c.min != null && c.min !== "" && v < Number(c.min)) return false;
+    if (c.max != null && c.max !== "" && v > Number(c.max)) return false;
+    return true;
+  }
+  function saveIpcRecord(rec, isNew, oldId) {
+    (rec.checks || []).forEach(function (c) { c.pass = checkPass(c); });
+    rec.result = (rec.checks || []).some(function (c) { return c.pass === false; }) ? "Fail" : "Pass";
+    replaceRow(db.ipcRecords, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "IPC Record", (rec.ipcNo || rec.id) + " " + rec.ipcType + " - " + rec.result);
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_ipc_record", oldId, "delete"); Sync.mark("t_ipc_record", rec.id); }
+    save(); return rec;
+  }
+  function createIpcRecord(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("IPC"), ipcNo: "IPC/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("ipc"), 3),
+      ipcType: inp.ipcType || "FR-QA-25", woId: inp.woId || "", woRef: inp.woRef || "",
+      campaignNo: inp.campaignNo || "", fgId: inp.fgId || "", checks: inp.checks || [],
+      result: "Pass", inspector: db.meta.user.email || db.meta.user.name,
+      recordedAt: inp.recordedAt || Engine.nowWIB(), note: inp.note || ""
+    };
+    return saveIpcRecord(rec, true, null);
+  }
+
+  /* ---------- bulk WO execution: BMR phase rows (FR-QA-12 / FR-PR-23) ---------- */
+  function phaseById(id) { return db.woBulkPhases.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function phasesFor(woId) {
+    return db.woBulkPhases.filter(function (p) { return String(p.woId) === String(woId); })
+      .sort(function (a, b) { return (Number(a.phaseNo) || 0) - (Number(b.phaseNo) || 0); });
+  }
+  function saveBulkPhase(rec, isNew, oldId) {
+    replaceRow(db.woBulkPhases, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "BMR Phase", (rec.phaseName || rec.phaseNo) + " " + rec.materialCode + " actual " + Engine.fmtNum(rec.actualKg, 2) + " kg");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_wo_bulk_phase", oldId, "delete"); Sync.mark("t_wo_bulk_phase", rec.id); }
+    save(); return rec;
+  }
+  function deleteBulkPhase(id) {
+    var p = phaseById(id); if (!p) return;
+    db.woBulkPhases = db.woBulkPhases.filter(function (x) { return String(x.id) !== String(id); });
+    audit("DELETE", "BMR Phase", (p.phaseName || p.phaseNo) + " " + p.materialCode);
+    if (window.Sync) Sync.mark("t_wo_bulk_phase", id, "delete");
+    save();
+  }
+  /* Bulk WO status walk gated by the FR-QA-21 mixing clearance. */
+  function transitionBulkWo(id, status) {
+    var wo = db.workOrdersBulk.filter(function (w) { return String(w.id) === String(id); })[0]; if (!wo) return false;
+    var ok = window.RBAC ? RBAC.canTransition("workOrderBulk", wo.status, status) : false;
+    if (!ok) { audit("DENY", "Bulk WO", (wo.woNo || id) + " - " + wo.status + " \u2192 " + status + " not allowed"); save(); return false; }
+    if (status === "InProgress" && !clearancePassed(id, "FR-QA-21")) {
+      audit("DENY", "Bulk WO", (wo.woNo || id) + " - FR-QA-21 line clearance not Passed"); save(); return false;
+    }
+    var from = wo.status; wo.status = status;
+    audit("TRANSITION", "Bulk WO", (wo.woNo || id) + " - " + from + " \u2192 " + status);
+    if (window.Sync) Sync.mark("t_work_order_bulk", wo.id);
+    save(); return true;
+  }
+
+  /* ---------- BTIP bulk transfer (FR-PR-21/22) ---------- */
+  function btipById(id) { return db.btipTransfers.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function createBtipTransfer(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("BTIP"), transferNo: "BTIP/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("btip"), 3),
+      woId: inp.woId || "", campaignNo: inp.campaignNo || "", fromVessel: inp.fromVessel || "", toHopper: inp.toHopper || "",
+      bulkCode: inp.bulkCode || "", qty: Number(inp.qty) || 0, uom: inp.uom || "Kg",
+      transferredBy: inp.transferredBy || db.meta.user.email || db.meta.user.name, qaBy: inp.qaBy || "",
+      transferredAt: inp.transferredAt || Engine.nowWIB(), status: "Draft", note: inp.note || ""
+    };
+    db.btipTransfers.unshift(rec);
+    if (window.Sync) Sync.mark("t_btip_transfer", rec.id);
+    audit("CREATE", "BTIP Transfer", rec.transferNo + " " + rec.fromVessel + " \u2192 " + rec.toHopper + " " + Engine.fmtNum(rec.qty, 2) + " " + rec.uom);
+    save(); return rec;
+  }
+  function saveBtipTransfer(rec, isNew, oldId) {
+    replaceRow(db.btipTransfers, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "BTIP Transfer", rec.transferNo + " [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_btip_transfer", oldId, "delete"); Sync.mark("t_btip_transfer", rec.id); }
+    save(); return rec;
+  }
+
+  /* ---------- pack WO execution (BMR filling & packing FR-QA-13) ----------
+     rendemen % = actual yield / theoretical output x 100, hard-checked to
+     95-100%; outside that band a variance remark is mandatory to close. */
+  function packWoById(id) { return db.workOrdersPack.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function rendemenOf(theoretical, actualYield) {
+    var t = Number(theoretical) || 0, a = Number(actualYield) || 0;
+    return t > 0 ? Engine.round4(a / t * 100) : 0;
+  }
+  function saveWorkOrderPack(rec, isNew, oldId) {
+    rec.rendemenPct = rendemenOf(rec.theoreticalOutput, rec.actualYield);
+    replaceRow(db.workOrdersPack, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Pack WO", (rec.woNo || rec.id) + " rendemen " + Engine.fmtNum(rec.rendemenPct, 2) + "% [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_work_order_pack", oldId, "delete"); Sync.mark("t_work_order_pack", rec.id); }
+    save(); return rec;
+  }
+  function createPackWo(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("WOP"), woNo: "WOP/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("wop"), 3),
+      campaignNo: inp.campaignNo || "", soId: inp.soId || "", fgId: inp.fgId || "", bulkWoId: inp.bulkWoId || "", bulkCode: inp.bulkCode || "",
+      status: "Planned", theoreticalOutput: Number(inp.theoreticalOutput) || 0, rejects: 0, actualYield: 0,
+      outputUnit: inp.outputUnit || "pcs", laborHours: 0, machineHours: 0, rendemenPct: 0, varianceRemark: "",
+      startedAt: "", doneAt: "", note: inp.note || ""
+    };
+    return saveWorkOrderPack(rec, true, null);
+  }
+  function transitionPackWo(id, status) {
+    var wo = packWoById(id); if (!wo) return false;
+    var ok = window.RBAC ? RBAC.canTransition("workOrderPack", wo.status, status) : false;
+    if (!ok) { audit("DENY", "Pack WO", (wo.woNo || id) + " - " + wo.status + " \u2192 " + status + " not allowed"); save(); return false; }
+    if (status === "InProgress" && !clearancePassed(id, "FR-QA-22")) {
+      audit("DENY", "Pack WO", (wo.woNo || id) + " - FR-QA-22 line clearance not Passed"); save(); return false;
+    }
+    if (status === "InProgress" && !wo.startedAt) wo.startedAt = Engine.nowWIB();
+    if (status === "Done") {
+      var r = rendemenOf(wo.theoreticalOutput, wo.actualYield);
+      if ((r < 95 || r > 100) && !(wo.varianceRemark && String(wo.varianceRemark).trim())) {
+        audit("DENY", "Pack WO", (wo.woNo || id) + " - rendemen " + Engine.fmtNum(r, 2) + "% outside 95-100% and no variance remark"); save(); return false;
+      }
+      wo.rendemenPct = r; wo.doneAt = Engine.nowWIB();
+    }
+    var from = wo.status; wo.status = status;
+    audit("TRANSITION", "Pack WO", (wo.woNo || id) + " - " + from + " \u2192 " + status + (status === "Done" ? " (rendemen " + Engine.fmtNum(wo.rendemenPct, 2) + "%)" : ""));
+    if (window.Sync) Sync.mark("t_work_order_pack", wo.id);
+    save(); return true;
+  }
+
+  /* ---------- release / disposition (FR-QC-06) ---------- */
+  function releaseById(id) { return db.releases.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function createRelease(inp) {
+    inp = inp || {};
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("REL"), releaseNo: "REL/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("rel"), 3),
+      woPackId: inp.woPackId || "", fgId: inp.fgId || "", campaignNo: inp.campaignNo || "", batchLot: inp.batchLot || "",
+      disposition: "Pending", qaCopy: inp.qaCopy || "", qcCopy: inp.qcCopy || "", signer: "", releasedAt: "", note: inp.note || ""
+    };
+    db.releases.unshift(rec);
+    if (window.Sync) Sync.mark("t_release", rec.id);
+    audit("CREATE", "Release", rec.releaseNo + " " + (rec.batchLot || rec.fgId) + " - Pending");
+    save(); return rec;
+  }
+  function saveRelease(rec, isNew, oldId) {
+    replaceRow(db.releases, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Release", rec.releaseNo + " [" + rec.disposition + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_release", oldId, "delete"); Sync.mark("t_release", rec.id); }
+    save(); return rec;
+  }
+  function setReleaseDisposition(id, disposition) {
+    var rel = releaseById(id); if (!rel) return false;
+    var ok = window.RBAC ? RBAC.canTransition("release", rel.disposition, disposition) : false;
+    if (!ok) { audit("DENY", "Release", rel.releaseNo + " - " + rel.disposition + " \u2192 " + disposition + " not allowed"); save(); return false; }
+    var from = rel.disposition; rel.disposition = disposition;
+    if (disposition === "Approved" || disposition === "Rejected") { rel.signer = db.meta.user.email || db.meta.user.name; rel.releasedAt = Engine.nowWIB(); }
+    audit("TRANSITION", "Release", rel.releaseNo + " - " + from + " \u2192 " + disposition);
+    if (window.Sync) Sync.mark("t_release", rel.id);
+    save(); return true;
+  }
+  function releaseApproved(woPackId) {
+    return db.releases.some(function (r) { return String(r.woPackId) === String(woPackId) && r.disposition === "Approved";
+    });
+  }
+
   /* ---------- Simulation & requests ---------- */
   function saveSim(rec) {
     db.sims.unshift(rec);
@@ -794,6 +1033,13 @@ window.Store = (function () {
     lotById: lotById, saveLot: saveLot, setLotStatus: setLotStatus,
     reservedOnLot: reservedOnLot, releasedLots: releasedLots, fifoPick: fifoPick,
     stagingById: stagingById, createStaging: createStaging, dispenseStaging: dispenseStaging, cancelStaging: cancelStaging,
+    lcById: lcById, clearancesFor: clearancesFor, clearancePassed: clearancePassed,
+    createLineClearance: createLineClearance, saveLineClearance: saveLineClearance, setClearanceStatus: setClearanceStatus,
+    ipcById: ipcById, ipcLimit: ipcLimit, createIpcRecord: createIpcRecord, saveIpcRecord: saveIpcRecord,
+    phaseById: phaseById, phasesFor: phasesFor, saveBulkPhase: saveBulkPhase, deleteBulkPhase: deleteBulkPhase, transitionBulkWo: transitionBulkWo,
+    btipById: btipById, createBtipTransfer: createBtipTransfer, saveBtipTransfer: saveBtipTransfer,
+    packWoById: packWoById, rendemenOf: rendemenOf, createPackWo: createPackWo, saveWorkOrderPack: saveWorkOrderPack, transitionPackWo: transitionPackWo,
+    releaseById: releaseById, createRelease: createRelease, saveRelease: saveRelease, setReleaseDisposition: setReleaseDisposition, releaseApproved: releaseApproved,
     saveSim: saveSim, saveRequest: saveRequest,
     exportJSON: exportJSON, importJSON: importJSON, resetToSample: resetToSample,
     importMasterCSV: importMasterCSV, exportMasterCSV: exportMasterCSV
