@@ -430,6 +430,68 @@ window.Sync = (function () {
     };
   }
 
+  /* ---- migration 006: FG receipt / FG ledger / delivery order / line ---- */
+  function fgrRow(r) {
+    return {
+      id: r.id, receipt_no: r.receiptNo || "", wo_pack_id: r.woPackId || null, release_id: r.releaseId || null,
+      fg_id: r.fgId || null, kode_fg: r.kodeFg || "", batch_lot: r.batchLot || "", campaign_no: r.campaignNo || "",
+      qty: Number(r.qty) || 0, qty_on_hand: Number(r.qtyOnHand) || 0, uom: r.uom || "pcs",
+      expiry: r.expiry || null, produced_at: r.producedAt || "", received_at: r.receivedAt || null,
+      received_by: r.receivedBy || "", backflush: r.backflush || [], note: r.note || ""
+    };
+  }
+  function fgrFrom(r) {
+    return {
+      id: r.id, receiptNo: r.receipt_no || "", woPackId: r.wo_pack_id || "", releaseId: r.release_id || "",
+      fgId: r.fg_id || "", kodeFg: r.kode_fg || "", batchLot: r.batch_lot || "", campaignNo: r.campaign_no || "",
+      qty: Number(r.qty) || 0, qtyOnHand: Number(r.qty_on_hand) || 0, uom: r.uom || "pcs",
+      expiry: r.expiry || "", producedAt: r.produced_at || "", receivedAt: r.received_at || "",
+      receivedBy: r.received_by || "", backflush: r.backflush || [], note: r.note || ""
+    };
+  }
+  function fgtRow(t) {
+    return {
+      id: t.id, txn_type: t.txnType || "RECEIPT", fg_id: t.fgId || null, kode_fg: t.kodeFg || "",
+      fg_receipt_id: t.fgReceiptId || null, do_id: t.doId || null, qty: Number(t.qty) || 0, uom: t.uom || "pcs",
+      ref_type: t.refType || "", ref_id: t.refId || "", note: t.note || "", txn_at: t.txnAt || ""
+    };
+  }
+  function fgtFrom(r) {
+    return {
+      id: r.id, txnType: r.txn_type || "RECEIPT", fgId: r.fg_id || "", kodeFg: r.kode_fg || "",
+      fgReceiptId: r.fg_receipt_id || "", doId: r.do_id || "", qty: Number(r.qty) || 0, uom: r.uom || "pcs",
+      refType: r.ref_type || "", refId: r.ref_id || "", note: r.note || "", txnAt: r.txn_at || ""
+    };
+  }
+  function doRow(d) {
+    return {
+      id: d.id, sj_no: d.sjNo || "", so_id: d.soId || null, customer_id: d.customerId || null,
+      customer_name: d.customerName || "", fg_id: d.fgId || null, kode_fg: d.kodeFg || "",
+      vehicle: d.vehicle || "", driver: d.driver || "", status: d.status || "Open",
+      delivered_at: d.deliveredAt || "", note: d.note || ""
+    };
+  }
+  function doFrom(r) {
+    return {
+      id: r.id, sjNo: r.sj_no || "", soId: r.so_id || "", customerId: r.customer_id || "",
+      customerName: r.customer_name || "", fgId: r.fg_id || "", kodeFg: r.kode_fg || "",
+      vehicle: r.vehicle || "", driver: r.driver || "", status: r.status || "Open",
+      deliveredAt: r.delivered_at || "", note: r.note || ""
+    };
+  }
+  function dlRow(l) {
+    return {
+      id: l.id, do_id: l.doId || null, fg_receipt_id: l.fgReceiptId || null, batch_lot: l.batchLot || "",
+      kode_fg: l.kodeFg || "", qty: Number(l.qty) || 0, uom: l.uom || "pcs", note: l.note || ""
+    };
+  }
+  function dlFrom(r) {
+    return {
+      id: r.id, doId: r.do_id || "", fgReceiptId: r.fg_receipt_id || "", batchLot: r.batch_lot || "",
+      kodeFg: r.kode_fg || "", qty: Number(r.qty) || 0, uom: r.uom || "pcs", note: r.note || ""
+    };
+  }
+
   /* ---------- table registry ----------
      v = migration that introduced the table (v > 1 may be absent).
      children = dependent rows re-pushed together with the parent.   */
@@ -471,7 +533,12 @@ window.Sync = (function () {
     { name: "t_wo_bulk_phase", pk:"id", key:"id", store:"woBulkPhases", v:5, order:"created_at.desc", row:phaseRow, from:phaseFrom },
     { name: "t_btip_transfer", pk:"id", key:"id", store:"btipTransfers", v:5, order:"created_at.desc", row:btipRow, from:btipFrom },
     { name: "t_work_order_pack", pk:"id", key:"id", store:"workOrdersPack", v:5, order:"created_at.desc", row:wopRow, from:wopFrom },
-    { name: "t_release", pk:"id", key:"id", store:"releases", v:5, order:"created_at.desc", row:relRow, from:relFrom }
+    { name: "t_release", pk:"id", key:"id", store:"releases", v:5, order:"created_at.desc", row:relRow, from:relFrom },
+    /* migration 006 - FG warehouse & logistics (receipt -> DO -> line -> FG ledger) */
+    { name: "t_fg_receipt", pk:"id", key:"id", store:"fgReceipts", v:6, order:"created_at.desc", row:fgrRow, from:fgrFrom },
+    { name: "t_delivery_order", pk:"id", key:"id", store:"deliveryOrders", v:6, order:"created_at.desc", row:doRow, from:doFrom },
+    { name: "t_delivery_line", pk:"id", key:"id", store:"deliveryLines", v:6, order:"created_at.desc", row:dlRow, from:dlFrom },
+    { name: "t_fg_txn", pk:"id", key:"id", store:"fgTxns", v:6, order:"created_at.desc", row:fgtRow, from:fgtFrom }
   ];
   /* append-only / single-row tables stay hand-coded */
   var EXTRAS = [

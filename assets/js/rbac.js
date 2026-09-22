@@ -59,6 +59,12 @@ window.RBAC = (function () {
   var QA_INSPECTORS = ["QA"];
   var PRODUCERS = ["Production"];
 
+  /* Phase 5 FG warehouse / logistics gates: Warehouse & Production receive
+     an approved pack WO into finished-goods stock (FR-PR-02); Warehouse
+     raises and closes the Surat Jalan outbound against a confirmed SO. */
+  var FG_RECEIVERS = ["Warehouse", "Production"];
+  var DELIVERY = ["Warehouse"];
+
   /* ---------- state machine ----------
      statuses      : the only legal values of the document status
      transitions   : allowed hops with the roles that may sign them off
@@ -131,9 +137,10 @@ window.RBAC = (function () {
       ]
     },
     deliveryOrder: {
-      statuses: ["Open", "Closed"],
+      statuses: ["Open", "Closed", "Void"],
       transitions: [
-        { from: "Open", to: "Closed", roles: ["Warehouse"] }
+        { from: "Open", to: "Closed", roles: ["Warehouse"] },
+        { from: "Open", to: "Void", roles: ["Warehouse"] }
       ]
     }
   };
@@ -160,6 +167,8 @@ window.RBAC = (function () {
   function canInspect() { return isAdmin() || QA_INSPECTORS.indexOf(role()) >= 0; }
   function canProduce() { return isAdmin() || PRODUCERS.indexOf(role()) >= 0; }
   function canRelease() { return isAdmin() || QA_INSPECTORS.indexOf(role()) >= 0; }
+  function canReceiveFg() { return isAdmin() || FG_RECEIVERS.indexOf(role()) >= 0; }
+  function canDeliver() { return isAdmin() || DELIVERY.indexOf(role()) >= 0; }
   function canTransition(entity, from, to) {
     var e = STATES[entity];
     if (!e) return false;
@@ -183,11 +192,13 @@ window.RBAC = (function () {
     MASTER_EDITORS: MASTER_EDITORS, SO_EDITORS: SO_EDITORS, PPIC_PLANNERS: PPIC_PLANNERS, STATES: STATES,
     PURCHASERS: PURCHASERS, RECEIVERS: RECEIVERS, QA_RELEASE: QA_RELEASE, STAGERS: STAGERS,
     QA_INSPECTORS: QA_INSPECTORS, PRODUCERS: PRODUCERS,
+    FG_RECEIVERS: FG_RECEIVERS, DELIVERY: DELIVERY,
     SETTINGS_ADMIN_ONLY_IN_CLOUD: SETTINGS_ADMIN_ONLY_IN_CLOUD,
     role: role, isAdmin: isAdmin, canEditFG: canEditFG, fgRights: fgRights,
     canEditMaster: canEditMaster, canEditSO: canEditSO, canPlan: canPlan, canTransition: canTransition,
     canPurchase: canPurchase, canReceive: canReceive, canReleaseLot: canReleaseLot, canStage: canStage,
     canInspect: canInspect, canProduce: canProduce, canRelease: canRelease,
+    canReceiveFg: canReceiveFg, canDeliver: canDeliver,
     transitionsFrom: transitionsFrom, lockedGroups: lockedGroups
   };
 })();

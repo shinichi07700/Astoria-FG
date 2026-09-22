@@ -17,6 +17,7 @@ window.App = (function () {
     { id: "requests", label: "MR / PR Documents", group: "PPIC" },
     { id: "purchasing", label: "Purchasing", group: "Supply Chain" },
     { id: "warehouse", label: "Warehouse / Stock", group: "Supply Chain" },
+    { id: "logistics", label: "FG & Logistics", group: "Supply Chain" },
     { id: "production", label: "Production", group: "Production" },
     { id: "qa", label: "QA / QC", group: "Production" },
     { id: "audit", label: "Audit Log", group: "Control" },
@@ -36,6 +37,7 @@ window.App = (function () {
     requests: function (r) { ViewsSim.requests(r); },
     purchasing: function (r) { ViewsPurchasing.list(r); },
     warehouse: function (r) { ViewsWarehouse.list(r); },
+    logistics: function (r) { ViewsLogistics.list(r); },
     production: function (r) { ViewsProduction.list(r); },
     qa: function (r) { ViewsQA.list(r); },
     audit: function (r) { ViewsSim.audit(r); },
@@ -164,7 +166,7 @@ window.App = (function () {
     };
     chip.textContent = labels[s] || "Cloud";
     chip.title = miss.length
-      ? "Cloud schema is behind - run the pending files in supabase/migrations (002, 003, 004, 005). Missing: " + miss.join(", ")
+      ? "Cloud schema is behind - run the pending files in supabase/migrations (002, 003, 004, 005, 006). Missing: " + miss.join(", ")
       : "";
     chip.dataset.s = s;
   }

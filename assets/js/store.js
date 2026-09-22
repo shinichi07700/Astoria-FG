@@ -7,7 +7,7 @@ window.Store = (function () {
   var KEY = "astoria_fg_suite_v1";
   var db = null;
   /* document sequences used across the pipeline (FR-xx numbering) */
-  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign", "staging", "wop", "lc", "ipc", "rel"];
+  var SEQ_KEYS = ["bom", "mr", "pr", "sim", "so", "po", "rcv", "wo", "btip", "qc", "sj", "calloff", "campaign", "staging", "wop", "lc", "ipc", "rel", "fgr"];
   function fixSeq() {
     db.meta.seq = db.meta.seq || {};
     SEQ_KEYS.forEach(function (k) { if (db.meta.seq[k] == null) db.meta.seq[k] = 0; });
@@ -31,6 +31,10 @@ window.Store = (function () {
     db.btipTransfers = db.btipTransfers || [];
     db.workOrdersPack = db.workOrdersPack || [];
     db.releases = db.releases || [];
+    db.fgReceipts = db.fgReceipts || [];
+    db.fgTxns = db.fgTxns || [];
+    db.deliveryOrders = db.deliveryOrders || [];
+    db.deliveryLines = db.deliveryLines || [];
     db.sims = db.sims || [];
     db.requests = db.requests || [];
     db.audit = db.audit || [];
@@ -887,6 +891,241 @@ window.Store = (function () {
     });
   }
 
+  /* ============================================================
+     PHASE 5 - finished-goods warehouse & outbound logistics
+     ============================================================ */
+
+  /* ---------- finished-goods ledger (Kartu Stock Barang Jadi) ----------
+     Append-only, signed qty (RECEIPT +, ISSUE -). FG SOH is derived from
+     the ledger; there is no opening balance (FG is only produced here). */
+  function fgTxnById(id) { return db.fgTxns.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function fgNet(kodeFg) {
+    return db.fgTxns.reduce(function (a, t) { return t.kodeFg === kodeFg ? a + (Number(t.qty) || 0) : a; }, 0);
+  }
+  function fgSoh(kodeFg) { return Engine.round4(fgNet(kodeFg)); }
+  function postFgTxn(t) {
+    var rec = {
+      id: t.id || uid("FGT"), txnType: t.txnType || "RECEIPT",
+      fgId: t.fgId || "", kodeFg: t.kodeFg || "", fgReceiptId: t.fgReceiptId || "", doId: t.doId || "",
+      qty: Number(t.qty) || 0, uom: t.uom || "pcs",
+      refType: t.refType || "", refId: t.refId || "", note: t.note || "",
+      txnAt: t.txnAt || Engine.nowWIB()
+    };
+    db.fgTxns.unshift(rec);
+    if (window.Sync) Sync.mark("t_fg_txn", rec.id);
+    return rec;
+  }
+  /* Chronological FG ledger with a running balance (Kartu Stock Barang Jadi). */
+  function fgLedgerFor(kodeFg) {
+    var rows = db.fgTxns.filter(function (t) { return t.kodeFg === kodeFg; })
+      .slice().sort(function (a, b) {
+        var d = String(a.txnAt || "").localeCompare(String(b.txnAt || ""));
+        return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
+      });
+    var bal = 0;
+    return rows.map(function (t) { bal = Engine.round4(bal + (Number(t.qty) || 0)); return { txn: t, balance: bal }; });
+  }
+
+  /* ---------- finished-goods receipt / lot (FR-PR-02) ---------- */
+  function fgReceiptById(id) { return db.fgReceipts.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  /* FG lots (receipts) with free stock for an FG, oldest produced first. */
+  function fgLotsFor(fgId) {
+    return db.fgReceipts.filter(function (r) {
+      return String(r.fgId) === String(fgId) && (Number(r.qtyOnHand) || 0) > 0;
+    }).sort(function (a, b) {
+      var d = String(a.producedAt || "").localeCompare(String(b.producedAt || ""));
+      return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
+    });
+  }
+  /* Qty on an FG receipt reserved by OPEN (not yet closed) delivery orders. */
+  function fgReservedOnReceipt(receiptId) {
+    var open = {};
+    db.deliveryOrders.forEach(function (d) { if (d.status === "Open") open[String(d.id)] = true; });
+    return db.deliveryLines.reduce(function (a, l) {
+      return (open[String(l.doId)] && String(l.fgReceiptId) === String(receiptId)) ? a + (Number(l.qty) || 0) : a;
+    }, 0);
+  }
+  function fgAvailableOnReceipt(receiptId) {
+    var r = fgReceiptById(receiptId); if (!r) return 0;
+    return Math.max(0, Engine.round4((Number(r.qtyOnHand) || 0) - fgReservedOnReceipt(receiptId)));
+  }
+  /* Greedy FIFO of `qty` across an FG's receipts (net of open-DO reservations). */
+  function fgPick(fgId, qty) {
+    var need = Number(qty) || 0, picks = [];
+    if (need > 0) {
+      fgLotsFor(fgId).forEach(function (r) {
+        if (need <= 0) return;
+        var take = Math.min(need, fgAvailableOnReceipt(r.id));
+        if (take > 0) {
+          picks.push({ fgReceiptId: r.id, batchLot: r.batchLot, kodeFg: r.kodeFg, qty: Engine.round4(take), uom: r.uom });
+          need = Engine.round4(need - take);
+        }
+      });
+    }
+    return { picks: picks, short: Engine.round4(Math.max(0, need)) };
+  }
+  /* Component consumption for a produced FG qty, net of what staging already
+     dispensed against the linked bulk WO. Uses the same explode() the netting
+     run uses so the maths never drifts. Only lines still owing are returned. */
+  function backflushRequirement(fgId, fgQty, bulkWoId) {
+    var bom = bomByFg(fgId); if (!bom) return [];
+    var ex = Engine.explode(bom, Number(fgQty) || 0, matMap());
+    var dispensed = {};
+    db.stagings.forEach(function (s) {
+      if (s.status === "Dispensed" && (!bulkWoId || String(s.woId) === String(bulkWoId))) {
+        dispensed[s.materialCode] = Engine.round4((dispensed[s.materialCode] || 0) + (Number(s.qty) || 0));
+      }
+    });
+    return ex.lines.map(function (l) {
+      var req = Engine.round4(l.gross), dis = Engine.round4(dispensed[l.materialCode] || 0);
+      return { materialCode: l.materialCode, materialName: l.name, section: l.section,
+        required: req, dispensed: dis, toIssue: Engine.round4(Math.max(0, req - dis)), uom: l.unit || "" };
+    }).filter(function (r) { return r.toIssue > 0; });
+  }
+  /* Create the FG receipt from an APPROVED pack work order: backflush the
+     component lots FIFO, open the FG lot and post the Kartu Stock RECEIPT. */
+  function createFgReceipt(inp) {
+    inp = inp || {};
+    var pack = packWoById(inp.woPackId); if (!pack) return { error: "Pack work order not found" };
+    if (!releaseApproved(pack.id)) return { error: "Only an APPROVED release (FR-QC-06) may be received into FG stock" };
+    if (db.fgReceipts.some(function (r) { return String(r.woPackId) === String(pack.id); }))
+      return { error: "This pack work order has already been received into FG stock" };
+    var fg = fgById(pack.fgId);
+    var kodeFg = (fg && fg.kodeFG) || inp.kodeFg || pack.fgId || "";
+    var qty = Number(inp.qty != null ? inp.qty : pack.actualYield) || 0;
+    if (qty <= 0) return { error: "Received quantity must be greater than zero" };
+    var rel = db.releases.filter(function (r) { return String(r.woPackId) === String(pack.id) && r.disposition === "Approved"; })[0] || null;
+    var date = inp.date || Engine.todayISO();
+    var rec = {
+      id: uid("FGR"), receiptNo: "FGR/" + Engine.romanMonth(date) + "/" + Engine.yearOf(date) + "/" + Engine.pad(nextSeq("fgr"), 3),
+      woPackId: pack.id, releaseId: rel ? rel.id : "", fgId: pack.fgId || "", kodeFg: kodeFg,
+      batchLot: inp.batchLot || (rel && rel.batchLot) || pack.bulkCode || "", campaignNo: pack.campaignNo || "",
+      qty: qty, qtyOnHand: qty, uom: inp.uom || pack.outputUnit || "pcs",
+      expiry: inp.expiry || "", producedAt: inp.producedAt || Engine.nowWIB(),
+      receivedAt: date, receivedBy: db.meta.user.email || db.meta.user.name || "", backflush: [], note: inp.note || ""
+    };
+    /* backflush component lots FIFO (net of staging already dispensed) */
+    backflushRequirement(pack.fgId, qty, pack.bulkWoId).forEach(function (r) {
+      var picked = fifoPick(r.materialCode, r.toIssue), picks = [];
+      picked.picks.forEach(function (p) {
+        var lot = lotById(p.lotId);
+        if (lot) { lot.qty = Engine.round4(Math.max(0, (Number(lot.qty) || 0) - p.qty)); if (window.Sync) Sync.mark("t_inventory_lot", lot.id); }
+        postTxn({ txnType: "ISSUE", materialCode: r.materialCode, materialName: r.materialName,
+          lotId: p.lotId, woId: pack.bulkWoId || "", qty: -p.qty, uom: p.uom,
+          refType: "BACKFLUSH", refId: rec.id, note: "Backflush FG receipt " + rec.receiptNo + " lot " + (p.lotNo || "") });
+        picks.push({ lotNo: p.lotNo || "", lotId: p.lotId, qty: p.qty });
+      });
+      r.issued = Engine.round4(picked.picks.reduce(function (a, p) { return a + p.qty; }, 0));
+      r.short = picked.short; r.picks = picks; rec.backflush.push(r);
+    });
+    db.fgReceipts.unshift(rec);
+    if (window.Sync) Sync.mark("t_fg_receipt", rec.id);
+    postFgTxn({ txnType: "RECEIPT", fgId: rec.fgId, kodeFg: kodeFg, fgReceiptId: rec.id,
+      qty: qty, uom: rec.uom, refType: "FG_RECEIPT", refId: rec.id,
+      note: "FG receipt " + rec.receiptNo + " batch " + (rec.batchLot || "-") });
+    audit("RECEIPT", "FG Receipt", rec.receiptNo + " " + kodeFg + " + " + Engine.fmtNum(qty, 0) + " " + rec.uom +
+      " (batch " + (rec.batchLot || "-") + ") from " + (pack.woNo || pack.id) + "; backflushed " + rec.backflush.length + " component line(s)");
+    save();
+    return { receipt: rec };
+  }
+  function saveFgReceipt(rec, isNew, oldId) {
+    replaceRow(db.fgReceipts, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "FG Receipt", rec.receiptNo + " " + rec.kodeFg + " on-hand " + Engine.fmtNum(rec.qtyOnHand, 0));
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_fg_receipt", oldId, "delete"); Sync.mark("t_fg_receipt", rec.id); }
+    save(); return rec;
+  }
+
+  /* ---------- delivery order / Surat Jalan (outbound) ---------- */
+  function deliveryById(id) { return db.deliveryOrders.filter(function (x) { return String(x.id) === String(id); })[0] || null; }
+  function deliveryLinesFor(doId) { return db.deliveryLines.filter(function (l) { return String(l.doId) === String(doId); }); }
+  function deliveryQty(doId) { return Engine.round4(deliveryLinesFor(doId).reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)); }
+  /* Cumulative delivered qty for an SO = lines of its CLOSED delivery orders. */
+  function soDeliveredQty(soId) {
+    var closed = {};
+    db.deliveryOrders.forEach(function (d) { if (d.status === "Closed" && String(d.soId) === String(soId)) closed[String(d.id)] = true; });
+    return Engine.round4(db.deliveryLines.reduce(function (a, l) { return closed[String(l.doId)] ? a + (Number(l.qty) || 0) : a; }, 0));
+  }
+  function soRemainingQty(soId) {
+    var so = soById(soId); if (!so) return 0;
+    return Math.max(0, Engine.round4((Number(so.orderQty) || 0) - soDeliveredQty(soId)));
+  }
+  /* Create a Surat Jalan against a CONFIRMED SO: FIFO-pick FG lots (the picks
+     reserve stock while Open; closing posts the ISSUE and draws it down). */
+  function createDeliveryOrder(inp) {
+    inp = inp || {};
+    var so = soById(inp.soId); if (!so) return { error: "Sales order not found" };
+    if (so.status !== "Confirmed") return { error: "Only a CONFIRMED sales order may be delivered" };
+    var qty = Number(inp.qty) || 0;
+    if (qty <= 0) return { error: "Delivery quantity must be greater than zero" };
+    var remaining = soRemainingQty(so.id);
+    if (qty > remaining) return { error: "Quantity exceeds the SO remaining " + Engine.fmtNum(remaining, 0) };
+    var fg = fgById(so.fgId);
+    var kodeFg = (fg && fg.kodeFG) || so.fgId || "";
+    var picked = fgPick(so.fgId, qty);
+    if (!picked.picks.length) return { error: "No finished-goods stock for " + kodeFg + " - receive an Approved pack WO first" };
+    var date = inp.date || Engine.todayISO();
+    var cust = so.customerId ? customerById(so.customerId) : null;
+    var rec = {
+      id: uid("SJ"), sjNo: Engine.noRequest("SJ", nextSeq("sj"), date),
+      soId: so.id, customerId: so.customerId || "", customerName: (cust && cust.name) || inp.customerName || "",
+      fgId: so.fgId || "", kodeFg: kodeFg, vehicle: inp.vehicle || "", driver: inp.driver || "",
+      status: "Open", deliveredAt: "", note: inp.note || ""
+    };
+    db.deliveryOrders.unshift(rec);
+    if (window.Sync) Sync.mark("t_delivery_order", rec.id);
+    picked.picks.forEach(function (p) {
+      var line = { id: uid("DL"), doId: rec.id, fgReceiptId: p.fgReceiptId, batchLot: p.batchLot || "",
+        kodeFg: p.kodeFg || kodeFg, qty: p.qty, uom: p.uom || "pcs", note: "" };
+      db.deliveryLines.unshift(line);
+      if (window.Sync) Sync.mark("t_delivery_line", line.id);
+    });
+    audit("CREATE", "Delivery Order", rec.sjNo + " - " + kodeFg + " x " + Engine.fmtNum(deliveryQty(rec.id), 0) +
+      " against " + (so.noSo || so.id) + (picked.short > 0 ? " (short " + Engine.fmtNum(picked.short, 0) + ")" : ""));
+    save();
+    return { do: rec, short: picked.short };
+  }
+  function saveDeliveryOrder(rec, isNew, oldId) {
+    replaceRow(db.deliveryOrders, "id", oldId || rec.id, rec, false);
+    audit(isNew ? "CREATE" : "UPDATE", "Delivery Order", rec.sjNo + " [" + rec.status + "]");
+    if (window.Sync) { if (!isNew && oldId && oldId !== rec.id) Sync.mark("t_delivery_order", oldId, "delete"); Sync.mark("t_delivery_order", rec.id); }
+    save(); return rec;
+  }
+  /* Close the Surat Jalan: draw down the FG lots, post the ISSUE ledger rows
+     and close the SO once it is fully delivered. */
+  function closeDeliveryOrder(id) {
+    var d = deliveryById(id); if (!d) return false;
+    var ok = window.RBAC ? RBAC.canTransition("deliveryOrder", d.status, "Closed") : false;
+    if (!ok) { audit("DENY", "Delivery Order", d.sjNo + " - " + d.status + " \u2192 Closed not allowed"); save(); return false; }
+    var lines = deliveryLinesFor(d.id);
+    lines.forEach(function (l) {
+      var r = fgReceiptById(l.fgReceiptId);
+      if (r) { r.qtyOnHand = Engine.round4(Math.max(0, (Number(r.qtyOnHand) || 0) - (Number(l.qty) || 0))); if (window.Sync) Sync.mark("t_fg_receipt", r.id); }
+      postFgTxn({ txnType: "ISSUE", fgId: d.fgId, kodeFg: l.kodeFg || d.kodeFg, fgReceiptId: l.fgReceiptId, doId: d.id,
+        qty: -(Number(l.qty) || 0), uom: l.uom || "pcs", refType: "SJ", refId: d.id,
+        note: "Surat Jalan " + d.sjNo + " batch " + (l.batchLot || "-") });
+    });
+    d.status = "Closed"; d.deliveredAt = Engine.nowWIB();
+    if (window.Sync) Sync.mark("t_delivery_order", d.id);
+    audit("TRANSITION", "Delivery Order", d.sjNo + " - Open \u2192 Closed (" + Engine.fmtNum(deliveryQty(d.id), 0) + " shipped)");
+    var so = soById(d.soId);
+    if (so && so.status === "Confirmed" && soDeliveredQty(so.id) >= (Number(so.orderQty) || 0)) {
+      so.status = "Closed";
+      if (window.Sync) Sync.mark("t_sales_order", so.id);
+      audit("TRANSITION", "Sales Order", so.noSo + " - Confirmed \u2192 Closed (fully delivered via " + d.sjNo + ")");
+    }
+    save();
+    return true;
+  }
+  function voidDeliveryOrder(id) {
+    var d = deliveryById(id); if (!d || d.status !== "Open") return false;
+    var ok = window.RBAC ? RBAC.canTransition("deliveryOrder", d.status, "Void") : false;
+    if (!ok) { audit("DENY", "Delivery Order", d.sjNo + " - Void not allowed"); save(); return false; }
+    d.status = "Void";
+    if (window.Sync) Sync.mark("t_delivery_order", d.id);
+    audit("CANCEL", "Delivery Order", d.sjNo + " voided - FG reservation released");
+    save(); return true;
+  }
+
   /* ---------- Simulation & requests ---------- */
   function saveSim(rec) {
     db.sims.unshift(rec);
@@ -1040,6 +1279,11 @@ window.Store = (function () {
     btipById: btipById, createBtipTransfer: createBtipTransfer, saveBtipTransfer: saveBtipTransfer,
     packWoById: packWoById, rendemenOf: rendemenOf, createPackWo: createPackWo, saveWorkOrderPack: saveWorkOrderPack, transitionPackWo: transitionPackWo,
     releaseById: releaseById, createRelease: createRelease, saveRelease: saveRelease, setReleaseDisposition: setReleaseDisposition, releaseApproved: releaseApproved,
+    fgTxnById: fgTxnById, fgNet: fgNet, fgSoh: fgSoh, postFgTxn: postFgTxn, fgLedgerFor: fgLedgerFor,
+    fgReceiptById: fgReceiptById, fgLotsFor: fgLotsFor, fgReservedOnReceipt: fgReservedOnReceipt, fgAvailableOnReceipt: fgAvailableOnReceipt, fgPick: fgPick,
+    backflushRequirement: backflushRequirement, createFgReceipt: createFgReceipt, saveFgReceipt: saveFgReceipt,
+    deliveryById: deliveryById, deliveryLinesFor: deliveryLinesFor, deliveryQty: deliveryQty, soDeliveredQty: soDeliveredQty, soRemainingQty: soRemainingQty,
+    createDeliveryOrder: createDeliveryOrder, saveDeliveryOrder: saveDeliveryOrder, closeDeliveryOrder: closeDeliveryOrder, voidDeliveryOrder: voidDeliveryOrder,
     saveSim: saveSim, saveRequest: saveRequest,
     exportJSON: exportJSON, importJSON: importJSON, resetToSample: resetToSample,
     importMasterCSV: importMasterCSV, exportMasterCSV: exportMasterCSV
