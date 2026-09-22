@@ -166,7 +166,7 @@ window.App = (function () {
     };
     chip.textContent = labels[s] || "Cloud";
     chip.title = miss.length
-      ? "Cloud schema is behind - run the pending files in supabase/migrations (002, 003, 004, 005, 006). Missing: " + miss.join(", ")
+      ? "Cloud schema is behind - run the pending files in supabase/migrations (002-006 create the tables, 007 hardens row-level security). Missing: " + miss.join(", ")
       : "";
     chip.dataset.s = s;
   }
