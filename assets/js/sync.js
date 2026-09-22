@@ -44,6 +44,12 @@ window.Sync = (function () {
      Presence of m_formula is the proxy for "002 applied". */
   function has002() { return !missing["m_formula"]; }
 
+  /* Migration 007 adds m_supplier plus the materials / t_purchase_req /
+     t_purchase_order supplier_id FK. Until it runs those columns are absent,
+     so the write-side row mappers must omit them. Presence of m_supplier
+     (a table only 007 creates) is the proxy for "007 applied". */
+  function has007() { return !missing["m_supplier"]; }
+
   /* ---------- dirty tracking ---------- */
   function loadPending() {
     try {
@@ -88,12 +94,14 @@ window.Sync = (function () {
       stock_qty: Number(m.stockQty) || 0, stocked: m.stocked !== false, supplier: m.supplier || ""
     };
     if (has002()) { row.moq = Number(m.moq) || 0; row.lead_days = Number(m.leadDays) || 0; }
+    if (has007()) { row.supplier_id = m.supplierId || null; }
     return row;
   }
   function matFrom(r) {
     return {
       code: r.code, name: r.name, category: r.category, unit: r.unit,
       stockQty: Number(r.stock_qty) || 0, stocked: !!r.stocked, supplier: r.supplier,
+      supplierId: r.supplier_id || "",
       moq: Number(r.moq) || 0, leadDays: Number(r.lead_days) || 0
     };
   }
@@ -104,6 +112,17 @@ window.Sync = (function () {
     };
   }
   function custFrom(r) {
+    return {
+      id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms
+    };
+  }
+  function supRow(s) {
+    return {
+      id: s.id, name: s.name || "", address: s.address || "", pic: s.pic || "",
+      contact: s.contact || "", terms: s.terms || ""
+    };
+  }
+  function supFrom(r) {
     return {
       id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms
     };
@@ -205,20 +224,22 @@ window.Sync = (function () {
     };
   }
   function prRow(p) {
-    return {
+    var row = {
       id: p.id, req_no: p.reqNo || "", so_id: p.soId || null, fg_id: p.fgId || null,
       material_code: p.materialCode || "", material_name: p.materialName || "",
       qty: Number(p.qty) || 0, net_qty: Number(p.netQty) || 0, unit: p.unit || "",
       moq: Number(p.moq) || 0, supplier: p.supplier || "",
       required_by: p.requiredBy || null, status: p.status || "Open"
     };
+    if (has007()) row.supplier_id = p.supplierId || null;
+    return row;
   }
   function prFrom(r) {
     return {
       id: r.id, reqNo: r.req_no || "", soId: r.so_id || "", fgId: r.fg_id || "",
       materialCode: r.material_code || "", materialName: r.material_name || "",
       qty: Number(r.qty) || 0, netQty: Number(r.net_qty) || 0, unit: r.unit || "",
-      moq: Number(r.moq) || 0, supplier: r.supplier || "",
+      moq: Number(r.moq) || 0, supplier: r.supplier || "", supplierId: r.supplier_id || "",
       requiredBy: r.required_by || "", status: r.status || "Open"
     };
   }
@@ -256,7 +277,7 @@ window.Sync = (function () {
   }
   /* ---- Phase 3 purchasing / warehouse tables (migration 004, v:4) ---- */
   function poRow(p) {
-    return {
+    var row = {
       id: p.id, po_no: p.poNo || "", pr_id: p.prId || null, supplier: p.supplier || "",
       material_code: p.materialCode || "", material_name: p.materialName || "",
       qty: Number(p.qty) || 0, received_qty: Number(p.receivedQty) || 0,
@@ -264,10 +285,12 @@ window.Sync = (function () {
       lead_days: Number(p.leadDays) || 0, eta: p.eta || null,
       status: p.status || "Open", note: p.note || ""
     };
+    if (has007()) row.supplier_id = p.supplierId || null;
+    return row;
   }
   function poFrom(r) {
     return {
-      id: r.id, poNo: r.po_no || "", prId: r.pr_id || "", supplier: r.supplier || "",
+      id: r.id, poNo: r.po_no || "", prId: r.pr_id || "", supplier: r.supplier || "", supplierId: r.supplier_id || "",
       materialCode: r.material_code || "", materialName: r.material_name || "",
       qty: Number(r.qty) || 0, receivedQty: Number(r.received_qty) || 0,
       unitPrice: Number(r.unit_price) || 0, unit: r.unit || "",
@@ -496,6 +519,10 @@ window.Sync = (function () {
      v = migration that introduced the table (v > 1 may be absent).
      children = dependent rows re-pushed together with the parent.   */
   var TABLES = [
+    /* m_supplier is FIRST because materials / t_purchase_req / t_purchase_order
+       carry a supplier_id FK to it (migration 007); upserts run parents-before-
+       dependents in TABLES order, and deletes run in reverse. */
+    { name: "m_supplier", pk: "id", key: "id", store: "suppliers", v: 7, row: supRow, from: supFrom },
     { name: "fg_master", pk: "id", key: "id", store: "fgs", v: 1, row: fgRow, from: fgFrom },
     { name: "materials", pk: "code", key: "code", store: "materials", v: 1, row: matRow, from: matFrom },
     { name: "m_customer", pk: "id", key: "id", store: "customers", v: 2, row: custRow, from: custFrom },

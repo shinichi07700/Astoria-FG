@@ -3,7 +3,7 @@
 
    Reads the role/field/state-machine config in assets/js/rbac.js
    (the SAME data the UI enforces) and emits the RLS migration
-   supabase/migrations/007_rls_policies.sql, so the client matrix
+   supabase/migrations/008_rls_policies.sql, so the client matrix
    and the database policies can never drift apart.
 
    Regenerate after any rbac.js change:   node tools/gen-rls.js
@@ -56,7 +56,7 @@ var ALL = RBAC.ROLES.slice();
 /* ---- table groups (emission order == migration order, for clean diffs) ---- */
 var GROUPS = [
   ["Master data (owned per rbac.js MASTER_EDITORS / FG_EDITOR_ROLES)",
-    ["fg_master", "m_customer", "m_formula", "m_packaging", "m_mixer"]],
+    ["fg_master", "m_customer", "m_supplier", "m_formula", "m_packaging", "m_mixer"]],
   ["Open masters - the UI does not role-gate these, so every staff account may write",
     ["materials", "boms", "bom_lines", "sims", "requests", "meta_kv"]],
   ["Sales order + PPIC planning",
@@ -73,6 +73,7 @@ var GROUPS = [
 var W = {
   fg_master:         U(RBAC.FG_EDITOR_ROLES),
   m_customer:        U(RBAC.MASTER_EDITORS.customers),
+  m_supplier:        U(RBAC.MASTER_EDITORS.suppliers),
   m_formula:         U(RBAC.MASTER_EDITORS.formulas),
   m_packaging:       U(RBAC.MASTER_EDITORS.packagings),
   m_mixer:           U(RBAC.MASTER_EDITORS.mixers),
@@ -128,17 +129,17 @@ var out = [];
 function w(s) { out.push(s === undefined ? "" : s); }
 
 w("-- ============================================================");
-w("--  007 - SERVER-SIDE RBAC (ROW LEVEL SECURITY) POLICIES");
+w("--  008 - SERVER-SIDE RBAC (ROW LEVEL SECURITY) POLICIES");
 w("--  GENERATED FILE - DO NOT EDIT BY HAND.");
 w("--  Source of truth: assets/js/rbac.js   Regenerate: node tools/gen-rls.js");
 w("--");
-w("--  Replaces the blanket staff_all policy (schema.sql + migrations 002-006)");
+w("--  Replaces the blanket staff_all policy (schema.sql + migrations 002-007)");
 w("--  with per-role WRITE policies derived from rbac.js, plus a column-ownership");
 w("--  guard on fg_master. SELECT stays open to every signed-in staff account");
 w("--  (in the app every role can view every page); Admin bypasses every gate.");
 w("--  The UI role matrix remains the first line of defence - this is the second.");
 w("--");
-w("--  Apply AFTER 002-006 in the Supabase SQL Editor. Because a first full sync");
+w("--  Apply AFTER 002-007 in the Supabase SQL Editor. Because a first full sync");
 w("--  deletes + re-pushes every table, SIGN IN AS ADMIN once after applying so the");
 w("--  seed upload is not blocked by the new write policies.");
 w("-- ============================================================");
@@ -245,7 +246,7 @@ w("  for each row execute function public.fg_master_column_guard();");
 w();
 
 var sql = out.join("\n") + "\n";
-var dest = path.join(__dirname, "..", "supabase", "migrations", "007_rls_policies.sql");
+var dest = path.join(__dirname, "..", "supabase", "migrations", "008_rls_policies.sql");
 fs.writeFileSync(dest, sql, "utf8");
 
 /* ---- summary to stdout ---- */

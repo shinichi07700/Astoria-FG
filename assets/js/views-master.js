@@ -443,7 +443,7 @@ window.ViewsMaster = (function () {
           return v <= 0 ? "<b style='color:var(--red)'>" + Engine.fmtNum(v) + "</b>" : Engine.fmtNum(v);
         } },
         { label: "Stocked", render: function (r) { return r.stocked ? UI.tag("Stocked") : UI.tag("Non-stock / direct buy"); } },
-        { label: "Supplier", render: function (r) { return r.supplier || "<span class='row-muted'>-</span>"; } },
+        { label: "Supplier", render: function (r) { var nm = supplierName(r.supplierId) || r.supplier || ""; return nm ? Engine.esc(nm) : "<span class='row-muted'>-</span>"; } },
         { label: "", render: function (r) {
           return UI.el("div", { class: "btn-row" }, [
             UI.btn("Edit", function () { matEditor(r); }, "btn-sm"),
@@ -467,13 +467,13 @@ window.ViewsMaster = (function () {
 
   function matEditor(rec) {
     var isNew = !rec;
-    var d = Object.assign({ code: "", name: "", category: "RM", unit: "pcs", stockQty: 0, stocked: true, supplier: "" }, rec || {});
+    var d = Object.assign({ code: "", name: "", category: "RM", unit: "pcs", stockQty: 0, stocked: true, supplier: "", supplierId: "" }, rec || {});
     var iCode = UI.input({ class: "input mono", value: d.code, placeholder: "e.g. 30200001" });
     var iName = UI.input({ value: d.name });
     var iCat = UI.select([["RM", CAT_LABEL.RM], ["PM", CAT_LABEL.PM], ["AX", CAT_LABEL.AX]], d.category);
     var iUnit = UI.input({ value: d.unit });
     var iStock = UI.input({ type: "number", step: "0.0001", value: String(d.stockQty) });
-    var iSup = UI.input({ value: d.supplier, placeholder: "Astoria / Customer / vendor name" });
+    var iSup = supplierCombo(d.supplierId);
     var body = UI.el("div", {}, [
       UI.el("div", { class: "form-grid" }, [
         UI.field("Item Code", iCode),
@@ -481,7 +481,7 @@ window.ViewsMaster = (function () {
         UI.field("Description", iName),
         UI.field("Unit", iUnit),
         UI.field("On-hand stock", iStock),
-        UI.field("Supplier / source", iSup)
+        UI.field("Supplier", iSup)
       ]),
       UI.checkRow("Stocked item (warehouse keeps stock; shortages become Purchase Request)", d.stocked, function (v) { d.stocked = v; })
     ]);
@@ -492,7 +492,7 @@ window.ViewsMaster = (function () {
         label: "Save Material", cls: "btn-primary", onClick: function () {
           d.code = iCode.value.trim(); d.name = iName.value.trim();
           d.category = iCat.value; d.unit = iUnit.value.trim() || "pcs";
-          d.stockQty = Number(iStock.value) || 0; d.supplier = iSup.value.trim();
+          d.stockQty = Number(iStock.value) || 0; d.supplierId = iSup.value; d.supplier = supplierName(iSup.value);
           if (!d.code || !d.name) { UI.toast("Item code and description are required", "err"); return; }
           if (isNew && Store.matMap()[d.code]) { UI.toast("Item code already exists", "err"); return; }
           if (!isNew && d.code !== rec.code && Store.matMap()[d.code]) { UI.toast("Item code already exists", "err"); return; }
@@ -614,6 +614,137 @@ window.ViewsMaster = (function () {
     var c = id ? Store.customerById(id) : null;
     return c ? (c.name || c.id) : "";
   }
+
+  /* ---------------- Master Supplier ----------------
+     Vendors that supply raw materials (RM) and packaging components (PM).
+     Maintained by Purchasing; every other role sees a read-only list. Each
+     material and Purchase Order references a supplier by id (m_supplier pk),
+     replacing the old free-text "Astoria / Customer / vendor name" field. */
+  var supFilter = { q: "" };
+  function supplierMaterials(id) {
+    return Store.get().materials.filter(function (m) { return String(m.supplierId || "") === String(id); });
+  }
+  function suppliers(root) {
+    var db = Store.get();
+    var canEdit = RBAC.canEditMaster("suppliers");
+    root.appendChild(UI.pageHead("Master Supplier",
+      "Vendors that supply raw materials and packaging components. Referenced by Master Material and Purchase Orders. Maintained by Purchasing.",
+      canEdit ? [UI.btn("+ New Supplier", function () { supEditor(null); }, "btn-primary")] : []));
+
+    var search = UI.input({ placeholder: "Search code / name / PIC...", value: supFilter.q });
+    search.addEventListener("input", function () { supFilter.q = search.value; draw(); });
+    var bodyWrap = UI.el("div");
+    function draw() {
+      UI.clear(bodyWrap);
+      var q = supFilter.q.toLowerCase();
+      var rows = db.suppliers.filter(function (s) {
+        if (!q) return true;
+        return (s.id + " " + (s.name || "") + " " + (s.pic || "")).toLowerCase().indexOf(q) >= 0;
+      }).sort(function (a, b) {
+        return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+      });
+      var cols = [
+        { label: "Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
+        { label: "Name", key: "name" },
+        { label: "PIC", render: function (r) { return Engine.esc(r.pic || "-"); } },
+        { label: "Contact", render: function (r) { return Engine.esc(r.contact || "-"); } },
+        { label: "Terms", render: function (r) { return Engine.esc(r.terms || "-"); } },
+        { label: "Materials", cls: "num", render: function (r) { return String(supplierMaterials(r.id).length); } },
+        { label: "", render: function (r) {
+          var btns = [UI.btn("Materials", function () { viewSupplierMaterials(r); }, "btn-sm")];
+          if (canEdit) {
+            btns.push(UI.btn("Edit", function () { supEditor(r); }, "btn-sm"));
+            btns.push(UI.btn("Delete", function () {
+              UI.confirmDialog("Delete supplier " + r.id + " (" + (r.name || "") + ")? Materials keep their text reference.", function () {
+                Store.deleteSupplier(r.id); App.refresh();
+              });
+            }, "btn-danger btn-sm"));
+          }
+          return UI.el("div", { class: "btn-row" }, btns);
+        } }
+      ];
+      bodyWrap.appendChild(UI.table(cols, rows, { emptyText: "No supplier yet. Create the first one." }));
+    }
+    var card = UI.el("section", { class: "card" });
+    card.appendChild(UI.el("div", { class: "toolbar" }, [search, UI.el("div", { class: "spacer" }),
+      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.suppliers.length + " suppliers" })]));
+    card.appendChild(UI.el("div", { class: "card-body tight" }, [bodyWrap]));
+    root.appendChild(card);
+    draw();
+    if (!canEdit) root.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
+      text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the supplier master is maintained by Purchasing." }));
+  }
+
+  function supEditor(rec) {
+    if (!RBAC.canEditMaster("suppliers")) { UI.toast("Supplier master is read-only for your role", "err"); return; }
+    var isNew = !rec;
+    var d = Object.assign({ id: "", name: "", address: "", pic: "", contact: "", terms: "" }, rec || {});
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. SUP-001" });
+    var iName = UI.input({ value: d.name, placeholder: "Vendor / supplier name" });
+    var iPic = UI.input({ value: d.pic, placeholder: "Person in charge" });
+    var iContact = UI.input({ value: d.contact, placeholder: "Phone / email" });
+    var iTerms = UI.input({ value: d.terms, placeholder: "e.g. TOP 30 days" });
+    var iAddr = UI.el("textarea", { class: "input", rows: "2", style: "width:100%", placeholder: "Supplier address" });
+    iAddr.value = d.address || "";
+    var body = UI.el("div", {}, [
+      UI.el("div", { class: "form-grid" }, [
+        UI.field("Supplier Code", iCode),
+        UI.field("Name", iName),
+        UI.field("PIC", iPic),
+        UI.field("Contact", iContact),
+        UI.field("Terms", iTerms)
+      ]),
+      UI.field("Address", iAddr)
+    ]);
+    UI.modal({
+      title: isNew ? "New Supplier" : "Edit Supplier - " + rec.id,
+      body: body,
+      actions: [{
+        label: "Save Supplier", cls: "btn-primary", onClick: function () {
+          d.id = iCode.value.trim(); d.name = iName.value.trim(); d.pic = iPic.value.trim();
+          d.contact = iContact.value.trim(); d.terms = iTerms.value.trim(); d.address = iAddr.value.trim();
+          if (!d.id || !d.name) { UI.toast("Supplier code and name are required", "err"); return; }
+          if (isNew && Store.supplierById(d.id)) { UI.toast("Supplier code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.supplierById(d.id)) { UI.toast("Supplier code already exists", "err"); return; }
+          Store.saveSupplier(d, isNew, rec ? rec.id : null);
+          UI.closeModal(); App.refresh();
+          UI.toast("Supplier " + d.id + " saved", "ok");
+        }
+      }]
+    });
+  }
+
+  function viewSupplierMaterials(s) {
+    var rows = supplierMaterials(s.id);
+    UI.modal({
+      title: "Materials from " + s.id + " - " + (s.name || ""),
+      body: UI.el("div", {}, [UI.table([
+        { label: "Item Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.code) + "</b>"; } },
+        { label: "Description", key: "name" },
+        { label: "Category", render: function (r) { return UI.tag(CAT_LABEL[r.category] || r.category); } },
+        { label: "Unit", key: "unit" }
+      ], rows, { emptyText: "No material is linked to this supplier yet." })]),
+      actions: [{ label: "Close", onClick: function () { UI.closeModal(); } }]
+    });
+  }
+
+  /* Supplier picker used by the material / purchase-order editors. Value is
+     the supplier id (m_supplier pk); the label shows the human name. */
+  function supplierCombo(value) {
+    var db = Store.get();
+    var opts = [["", "(no supplier)"]].concat(db.suppliers.map(function (s) {
+      return [s.id, (s.name || s.id) + (s.id ? "  (" + s.id + ")" : "")];
+    }));
+    if (value && !db.suppliers.some(function (s) { return s.id === value; })) {
+      opts.push([value, value + "  (not in master)"]);
+    }
+    return UI.combo(opts, value || "", "Type to search supplier...");
+  }
+  function supplierName(id) {
+    var s = id ? Store.supplierById(id) : null;
+    return s ? (s.name || s.id) : "";
+  }
+
   var STAB_OPTS = [["-", "- (not set)"], ["Running", "Running"], ["Pass", "Pass"], ["Fail", "Fail"]];
   function stabTag(v) {
     var map = { "Pass": ["#1a7f4b", "#e7f6ee"], "Fail": ["#b42318", "#fdeceb"], "Running": ["#9a6b00", "#fff5e0"] };
@@ -860,6 +991,7 @@ window.ViewsMaster = (function () {
     inp.click();
   }
 
-  return { dashboard: dashboard, fg: fg, materials: materials, customers: customers,
-    formulas: formulas, packagings: packagings, CAT_LABEL: CAT_LABEL, ROLES: ROLES, pickFile: pickFile };
+  return { dashboard: dashboard, fg: fg, materials: materials, customers: customers, suppliers: suppliers,
+    formulas: formulas, packagings: packagings, CAT_LABEL: CAT_LABEL, ROLES: ROLES, pickFile: pickFile,
+    supplierCombo: supplierCombo, supplierName: supplierName };
 })();

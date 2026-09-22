@@ -109,9 +109,9 @@ window.ViewsPurchasing = (function () {
       return db.purchaseReqs.filter(function (r) { return String(r.id) === String(id); })[0];
     }).filter(Boolean);
     if (!lines.length) return;
-    var firstSupplier = lines[0].supplier || "";
+    var firstSupplierId = lines[0].supplierId || "";
 
-    var iSupplier = UI.input({ value: firstSupplier, placeholder: "Supplier name" });
+    var iSupplier = ViewsMaster.supplierCombo(firstSupplierId);
     var iEta = UI.input({ type: "date" });
     var iLead = UI.input({ type: "number", step: "1", min: "0", value: "0" });
     var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%", placeholder: "PO notes / terms" });
@@ -145,7 +145,7 @@ window.ViewsPurchasing = (function () {
           var prices = {};
           Object.keys(priceInputs).forEach(function (k) { prices[k] = Number(priceInputs[k].value) || 0; });
           var res = Store.createPoFromPr(prIds, {
-            supplier: iSupplier.value.trim(), eta: iEta.value || "",
+            supplierId: iSupplier.value, supplier: ViewsMaster.supplierName(iSupplier.value), eta: iEta.value || "",
             leadDays: Number(iLead.value) || 0, prices: prices, note: iNote.value.trim()
           });
           UI.closeModal(); App.refresh();

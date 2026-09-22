@@ -13,3 +13,6 @@ Desktop.ini
 desktop.ini
 .DS_Store
 *.log
+
+# --- IDE / agent local cache ---
+.qoder/

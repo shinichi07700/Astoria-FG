@@ -1,15 +1,15 @@
 -- ============================================================
---  007 - SERVER-SIDE RBAC (ROW LEVEL SECURITY) POLICIES
+--  008 - SERVER-SIDE RBAC (ROW LEVEL SECURITY) POLICIES
 --  GENERATED FILE - DO NOT EDIT BY HAND.
 --  Source of truth: assets/js/rbac.js   Regenerate: node tools/gen-rls.js
 --
---  Replaces the blanket staff_all policy (schema.sql + migrations 002-006)
+--  Replaces the blanket staff_all policy (schema.sql + migrations 002-007)
 --  with per-role WRITE policies derived from rbac.js, plus a column-ownership
 --  guard on fg_master. SELECT stays open to every signed-in staff account
 --  (in the app every role can view every page); Admin bypasses every gate.
 --  The UI role matrix remains the first line of defence - this is the second.
 --
---  Apply AFTER 002-006 in the Supabase SQL Editor. Because a first full sync
+--  Apply AFTER 002-007 in the Supabase SQL Editor. Because a first full sync
 --  deletes + re-pushes every table, SIGN IN AS ADMIN once after applying so the
 --  seed upload is not blocked by the new write policies.
 -- ============================================================
@@ -24,7 +24,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['fg_master', 'm_customer', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn'] loop
+  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn'] loop
     execute format('drop policy if exists staff_all on public.%I', t);
   end loop;
 end $$;
@@ -33,7 +33,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['fg_master', 'm_customer', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn', 'audit_log', 'profiles'] loop
+  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn', 'audit_log', 'profiles'] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
 end $$;
@@ -61,6 +61,16 @@ drop policy if exists m_customer_update on public.m_customer;
 create policy m_customer_update on public.m_customer for update to authenticated using (public.auth_role() = any (array['Admin', 'Marketing'])) with check (public.auth_role() = any (array['Admin', 'Marketing']));
 drop policy if exists m_customer_delete on public.m_customer;
 create policy m_customer_delete on public.m_customer for delete to authenticated using (public.auth_role() = any (array['Admin', 'Marketing']));
+
+-- m_supplier  (write: Admin, Purchasing)
+drop policy if exists m_supplier_read on public.m_supplier;
+create policy m_supplier_read on public.m_supplier for select to authenticated using (true);
+drop policy if exists m_supplier_insert on public.m_supplier;
+create policy m_supplier_insert on public.m_supplier for insert to authenticated with check (public.auth_role() = any (array['Admin', 'Purchasing']));
+drop policy if exists m_supplier_update on public.m_supplier;
+create policy m_supplier_update on public.m_supplier for update to authenticated using (public.auth_role() = any (array['Admin', 'Purchasing'])) with check (public.auth_role() = any (array['Admin', 'Purchasing']));
+drop policy if exists m_supplier_delete on public.m_supplier;
+create policy m_supplier_delete on public.m_supplier for delete to authenticated using (public.auth_role() = any (array['Admin', 'Purchasing']));
 
 -- m_formula  (write: Admin, RND Formula)
 drop policy if exists m_formula_read on public.m_formula;

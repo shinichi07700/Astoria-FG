@@ -365,6 +365,28 @@ window.ViewsSim = (function () {
       }, "btn-danger")
     ])));
 
+    /* Demo pipeline (Admin-only): builds a fully-linked sample chain up to an
+       APPROVED packing work order so the FG receipt (FR-PR-02) and the Surat
+       Jalan can be raised live. The whole chain signs off every department's
+       state machine, so only Admin may load it. */
+    if ((db.meta.user || {}).role === "Admin") {
+      root.appendChild(UI.card("Demo pipeline (end-to-end sample)", null, UI.el("div", {}, [
+        UI.el("p", { class: "muted", style: "margin:0 0 10px;font-size:12.8px;line-height:1.6",
+          text: "Builds a fully-linked sample chain on top of the current data: a Master Customer, three Master Suppliers (with the raw & related materials linked to them), a Confirmed Sales Order, PPIC netting (PR + call-off + campaign), Purchase Orders, received & QA-released lots, staging, line clearances, bulk mixing, a BTIP transfer, packing and an APPROVED release (FR-QC-06). It stops at the approved packing WO so you can raise the FG receipt and the Surat Jalan live." }),
+        UI.el("div", { class: "btn-row" }, [
+          UI.btn("Load demo pipeline", function () {
+            UI.confirmDialog("Load the demo pipeline? This adds sample master data and documents to the current dataset.", function () {
+              try {
+                var res = DemoSeed.build();
+                UI.toast(res.message || "Demo pipeline loaded", res.alreadyLoaded ? "err" : "ok");
+                App.refresh();
+              } catch (e) { UI.toast("Demo build failed: " + e.message, "err"); }
+            }, "Load demo");
+          }, "btn-primary")
+        ])
+      ])));
+    }
+
     root.appendChild(UI.card("Business rules implemented (v1)", null, UI.el("div", { style: "font-size:12.8px;line-height:1.7" }, [
       UI.el("ul", { style: "margin:0;padding-left:18px" }, [
         UI.el("li", { html: "<b>Kode Produk F/G (col A)</b> = FFS Formula + '-' + FPS Kemas (fallback to whichever exists)." }),

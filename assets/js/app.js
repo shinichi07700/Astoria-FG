@@ -8,6 +8,7 @@ window.App = (function () {
     { id: "fg", label: "Master F/G", group: "Master Data" },
     { id: "materials", label: "Master Material", group: "Master Data" },
     { id: "customers", label: "Master Customer", group: "Master Data" },
+    { id: "suppliers", label: "Master Supplier", group: "Master Data" },
     { id: "formulas", label: "Master Formula", group: "Master Data" },
     { id: "packagings", label: "Master Packaging", group: "Master Data" },
     { id: "so", label: "Sales Order", group: "Sales" },
@@ -28,6 +29,7 @@ window.App = (function () {
     fg: function (r) { ViewsMaster.fg(r); },
     materials: function (r) { ViewsMaster.materials(r); },
     customers: function (r) { ViewsMaster.customers(r); },
+    suppliers: function (r) { ViewsMaster.suppliers(r); },
     formulas: function (r) { ViewsMaster.formulas(r); },
     packagings: function (r) { ViewsMaster.packagings(r); },
     so: function (r) { ViewsSO.list(r); },
@@ -166,7 +168,7 @@ window.App = (function () {
     };
     chip.textContent = labels[s] || "Cloud";
     chip.title = miss.length
-      ? "Cloud schema is behind - run the pending files in supabase/migrations (002-006 create the tables, 007 hardens row-level security). Missing: " + miss.join(", ")
+      ? "Cloud schema is behind - run the pending files in supabase/migrations (002-007 create the tables, 008 hardens row-level security). Missing: " + miss.join(", ")
       : "";
     chip.dataset.s = s;
   }

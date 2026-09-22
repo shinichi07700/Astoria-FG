@@ -32,6 +32,7 @@ window.RBAC = (function () {
   /* Ownership of the pipeline masters introduced by migration 002 */
   var MASTER_EDITORS = {
     customers: ["Marketing"],
+    suppliers: ["Purchasing"],
     formulas: ["RND Formula"],
     packagings: ["RND Kemas"],
     mixers: ["PPIC", "Production"]

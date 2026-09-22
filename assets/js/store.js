@@ -14,6 +14,7 @@ window.Store = (function () {
   }
   function fixArrays() {
     db.customers = db.customers || [];
+    db.suppliers = db.suppliers || [];
     db.formulas = db.formulas || [];
     db.packagings = db.packagings || [];
     db.mixers = db.mixers || [];
@@ -245,6 +246,8 @@ window.Store = (function () {
   var MASTER_CFG = {
     customer: { table: "m_customer", store: "customers", key: "id", label: "Master Customer",
       describe: function (c) { return c.id + " " + (c.name || ""); } },
+    supplier: { table: "m_supplier", store: "suppliers", key: "id", label: "Master Supplier",
+      describe: function (s) { return s.id + " " + (s.name || ""); } },
     formula: { table: "m_formula", store: "formulas", key: "id", label: "Master Formula (FFS)",
       describe: function (f) { return f.id + " kategori " + (f.kategori || "-") + " BJ " + (f.bj || 1); } },
     packaging: { table: "m_packaging", store: "packagings", key: "id", label: "Master Packaging (FPS)",
@@ -276,14 +279,17 @@ window.Store = (function () {
     return db[cfg.store].filter(function (x) { return String(x[cfg.key]) === String(id); })[0] || null;
   }
   function saveCustomer(rec, isNew, oldId) { return saveMaster("customer", rec, isNew, oldId); }
+  function saveSupplier(rec, isNew, oldId) { return saveMaster("supplier", rec, isNew, oldId); }
   function saveFormula(rec, isNew, oldId) { return saveMaster("formula", rec, isNew, oldId); }
   function savePackaging(rec, isNew, oldId) { return saveMaster("packaging", rec, isNew, oldId); }
   function saveMixer(rec, isNew, oldId) { return saveMaster("mixer", rec, isNew, oldId); }
   function deleteCustomer(id) { deleteMaster("customer", id); }
+  function deleteSupplier(id) { deleteMaster("supplier", id); }
   function deleteFormula(id) { deleteMaster("formula", id); }
   function deletePackaging(id) { deleteMaster("packaging", id); }
   function deleteMixer(id) { deleteMaster("mixer", id); }
   function customerById(id) { return masterById("customer", id); }
+  function supplierById(id) { return masterById("supplier", id); }
   function formulaById(id) { return masterById("formula", id); }
   function packagingById(id) { return masterById("packaging", id); }
   function mixerById(id) { return masterById("mixer", id); }
@@ -395,7 +401,7 @@ window.Store = (function () {
         id: uid("PR"), reqNo: reqNo, soId: soId, fgId: inp.fgId || "",
         materialCode: l.materialCode, materialName: l.name || m.name || "",
         qty: l.orderQty, netQty: l.net, unit: l.unit || m.unit || "", moq: l.moq || 0,
-        supplier: m.supplier || "", requiredBy: l.requiredBy || "", status: "Open"
+        supplier: m.supplier || "", supplierId: m.supplierId || "", requiredBy: l.requiredBy || "", status: "Open"
       };
       db.purchaseReqs.unshift(rec);
       if (window.Sync) Sync.mark("t_purchase_req", rec.id);
@@ -503,6 +509,7 @@ window.Store = (function () {
       var rec = {
         id: uid("PO"), poNo: poNo, prId: pr.id,
         supplier: opts.supplier || pr.supplier || m.supplier || "",
+        supplierId: opts.supplierId || pr.supplierId || m.supplierId || "",
         materialCode: pr.materialCode, materialName: pr.materialName || m.name || "",
         qty: Number(pr.qty) || 0, receivedQty: 0,
         unitPrice: Number((opts.prices || {})[pr.id]) || 0,
@@ -1158,6 +1165,12 @@ window.Store = (function () {
   }
   function resetToSample() {
     db = Seed.build();
+    /* Seed.build() only carries the master sample (materials/fgs/boms/mixers).
+       Normalize the full pipeline shape exactly like load()/hydrate() do, or the
+       pipeline views and DemoSeed.build() throw on undefined arrays / seq keys
+       until the next full reload happens to re-run load(). */
+    fixSeq();
+    fixArrays();
     refreshDerived();
     if (window.Sync) Sync.markAll();
     save();
@@ -1260,6 +1273,7 @@ window.Store = (function () {
     saveFG: saveFG, deleteFG: deleteFG, reviseFG: reviseFG,
     saveMaterial: saveMaterial, deleteMaterial: deleteMaterial,
     saveCustomer: saveCustomer, deleteCustomer: deleteCustomer, customerById: customerById,
+    saveSupplier: saveSupplier, deleteSupplier: deleteSupplier, supplierById: supplierById,
     saveFormula: saveFormula, deleteFormula: deleteFormula, formulaById: formulaById,
     savePackaging: savePackaging, deletePackaging: deletePackaging, packagingById: packagingById,
     saveMixer: saveMixer, deleteMixer: deleteMixer, mixerById: mixerById,
