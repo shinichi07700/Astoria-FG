@@ -153,6 +153,14 @@ window.App = (function () {
     Store.runExpiryAudit();
     updateUserChip();
     updateSyncChip();
+    /* An Admin reset this account to its employee ID. Nothing else renders and
+       the sidenav stays empty, because a number printed on a staff card is not
+       a password and every audit entry made with it would blame its owner. */
+    var pr = window.Sync && Sync.getProfile && Sync.getProfile();
+    if (pr && pr.pw_temp) {
+      ViewsUsers.forcePassword(UI.clear(document.getElementById("view")));
+      return;
+    }
     renderNav();
     go("dashboard");
   }
@@ -183,11 +191,19 @@ window.App = (function () {
     chip.dataset.s = s;
   }
 
+  var LOGIN_MAX_FAILS = 5;
+
+  /* Counting failures here is guidance, not security: a reload, another device
+     or a direct REST call all reset it. Supabase's own limit on /auth/v1/token
+     (per IP, 150 per 5 minutes by default) is the enforced one. The point is to
+     stop a staff member typing the same wrong password twenty times and to send
+     them to the Admin instead of opening a support ticket by accident. */
   function renderLogin() {
     document.body.classList.add("login-mode");
     var view = UI.clear(document.getElementById("view"));
+    var fails = 0;
     var err = UI.el("div", { class: "login-err", text: "" });
-    var iEmail = UI.input({ type: "email", placeholder: "name@astoriaprima.co.id" });
+    var iEmail = UI.input({ type: "email", placeholder: "name@astoriaprima.com" });
     var iPass = UI.input({ type: "password", placeholder: "Your password" });
     var btn = UI.btn("Sign in", function () {
       btn.disabled = true;
@@ -196,7 +212,11 @@ window.App = (function () {
         finishBoot();
         UI.toast("Signed in to the Astoria cloud", "ok");
       }, function (msg) {
-        err.textContent = msg || "Sign-in failed";
+        msg = msg || "Sign-in failed";
+        fails++;
+        if (fails >= LOGIN_MAX_FAILS) { loginLocked(msg); return; }
+        err.textContent = msg + " - " + (LOGIN_MAX_FAILS - fails) +
+          " attempt" + (LOGIN_MAX_FAILS - fails === 1 ? "" : "s") + " left on this screen";
         btn.disabled = false;
       });
     }, "btn-primary");
@@ -215,6 +235,27 @@ window.App = (function () {
       ])
     ]));
     iPass.addEventListener("keydown", function (e) { if (e.key === "Enter") btn.click(); });
+    if (fails === 1 && iEmail.value) iPass.focus();
+  }
+
+  function loginLocked(lastMsg) {
+    var view = UI.clear(document.getElementById("view"));
+    view.appendChild(UI.el("div", { class: "login-wrap" }, [
+      UI.el("div", { class: "login-card" }, [
+        UI.el("img", { class: "login-logo", src: "assets/img/logo.png", alt: "PT Astoria Prima" }),
+        UI.el("div", { class: "login-title", text: "Too many failed attempts" }),
+        UI.el("div", { class: "login-sub", text: "This sign-in screen has stopped after " + LOGIN_MAX_FAILS + " failed attempts." }),
+        UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
+          text: "Contact Admin and ask for a password reset - your password is reset to your employee ID " +
+            "and you will be asked to choose a new one on your next sign-in."
+        }),
+        UI.el("p", { class: "muted", style: "margin:0 0 12px;font-size:12.5px",
+          text: "Last error: " + lastMsg }),
+        UI.el("div", { class: "btn-row" }, [
+          UI.btn("Try a different account", function () { renderLogin(); }, "btn-primary")
+        ])
+      ])
+    ]));
   }
 
   return { go: go, refresh: refresh, boot: boot, updateUserChip: updateUserChip, renderNav: renderNav };

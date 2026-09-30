@@ -68,11 +68,20 @@ window.ViewsUsers = (function () {
     root.appendChild(card);
 
     var rows0 = [];
+    /* emp_id and pw_temp arrive with migration 014. Sending a column the cloud
+       does not have fails the whole PATCH, so probe once per open (hasColumn
+       reads the PostgREST schema cache, not a hydrated row, so it is correct on
+       an empty table) and drop the column from the form when it is missing. */
+    var hasEmp = false;
     function load() {
       UI.clear(body);
       body.appendChild(UI.el("p", { class: "muted", text: "Loading staff accounts..." }));
-      SB.selectAll("profiles", null, "email.asc").then(function (rows) {
-        rows0 = rows || [];
+      Promise.all([
+        SB.selectAll("profiles", null, "email.asc"),
+        SB.hasColumn("profiles", "emp_id").catch(function () { return false; })
+      ]).then(function (res) {
+        rows0 = res[0] || [];
+        hasEmp = !!res[1];
         UI.clear(body);
         draw(rows0);
       }).catch(function (e) {
@@ -91,11 +100,12 @@ window.ViewsUsers = (function () {
       var me = myUid();
       rows.forEach(function (r) {
         var iName = UI.input({ value: r.full_name || "", placeholder: "Full name" });
+        var iEmp = UI.input({ value: r.emp_id || "", placeholder: "Staff no." });
         /* profiles.role is NOT NULL DEFAULT 'PPIC', so a stored role is always
            one of the options - the fallback keeps a hand-edited row honest. */
         var iRole = UI.select(opts, r.role || "PPIC");
-        var save = UI.btn("Save", function () { commit(r, iName, iRole, save); }, "btn-primary btn-sm");
-        ed[r.id] = { name: iName, role: iRole, save: save };
+        var save = UI.btn("Save", function () { commit(r, iName, iEmp, iRole, save); }, "btn-primary btn-sm");
+        ed[r.id] = { name: iName, emp: iEmp, role: iRole, save: save };
       });
 
       function cell(row) { return ed[row.id] || {}; }
@@ -104,6 +114,7 @@ window.ViewsUsers = (function () {
       body.appendChild(UI.table([
         { label: "Email", cls: "mono", render: function (r) { return r.email || "(no email on profile)"; } },
         { label: "Name", render: function (r) { return cell(r).name; } },
+        hasEmp ? { label: "Emp ID", cls: "mono", render: function (r) { return cell(r).emp; } } : null,
         { label: "Role", render: function (r) { return cell(r).role; } },
         { label: "Last change", cls: "mono", render: function (r) { return when(r.updated_at); } },
         {
@@ -111,18 +122,20 @@ window.ViewsUsers = (function () {
             return UI.el("div", { class: "btn-row" }, [
               r.id === me ? UI.tag("you") : null,
               adminCount === 1 && r.role === "Admin" ? UI.tag("last Admin") : null,
+              r.pw_temp ? UI.tag("temp password") : null,
               cell(r).save
             ]);
           }
         }
-      ], rows, {
+      ].filter(function (c) { return !!c; }), rows, {
         emptyText: "No profiles rows yet. The first one appears after an account signs in once - " +
           "or run supabase\\create-user.ps1 to create accounts with their roles."
       }));
     }
 
-    function commit(row, iName, iRole, btnNode) {
+    function commit(row, iName, iEmp, iRole, btnNode) {
       var name = iName.value.trim();
+      var emp = hasEmp ? iEmp.value.trim() : (row.emp_id || "");
       var role = iRole.value;
       if (!name) { UI.toast("Name cannot be empty", "err"); return; }
       if (!role) { UI.toast("Pick a role", "err"); return; }
@@ -134,20 +147,22 @@ window.ViewsUsers = (function () {
         UI.toast("This is the only Admin account - promote another person to Admin first", "err");
         return;
       }
-      if (name === (row.full_name || "") && role === row.role) {
+      if (name === (row.full_name || "") && role === row.role && emp === (row.emp_id || "")) {
         UI.toast("Nothing changed for " + (row.email || row.id), "");
         return;
       }
       btnNode.disabled = true;
       btnNode.textContent = "Saving...";
+      var changes = { full_name: name, role: role, updated_at: new Date().toISOString() };
+      if (hasEmp) changes.emp_id = emp;
       /* updated_at has no trigger on profiles, so the writer stamps it. */
-      SB.patch("profiles", "id=eq." + encodeURIComponent(row.id), {
-        full_name: name, role: role, updated_at: new Date().toISOString()
-      }).then(function (out) {
+      SB.patch("profiles", "id=eq." + encodeURIComponent(row.id), changes).then(function (out) {
         if (!out || !out.length) throw new Error("no row matched that id - nothing was changed");
         var isMe = row.id === myUid();
         Store.audit("UPDATE", "Master User",
-          (row.email || row.id) + ": " + (row.full_name || "-") + " (" + (row.role || "-") + ") -> " + name + " (" + role + ")");
+          (row.email || row.id) + ": " + (row.full_name || "-") + " (" + (row.role || "-") + ")" +
+          (emp === (row.emp_id || "") ? "" : ", emp " + (row.emp_id || "-") + " -> " + (emp || "-")) +
+          " -> " + name + " (" + role + ")");
         if (isMe) {
           /* Editing yourself: refresh every copy of the identity the UI reads,
              before save() so localStorage keeps the same name/role. */
@@ -178,11 +193,91 @@ window.ViewsUsers = (function () {
     load();
   }
 
-  /* ---------- Own account + change password ---------- */
+  /* ---------- Own password ---------- */
+  /* One form, two entry points: the optional "My account" box opened from the
+     name chip, and the blocking must-change screen shown when an Admin has
+     reset this account to its employee ID.
+     o = { label, hint, clearTemp, also, onDone } */
+  function passwordPanel(o) {
+    var email = myEmail();
+    var iOld = UI.input({ type: "password", placeholder: "Current password", autocomplete: "current-password" });
+    var iNew = UI.input({ type: "password", placeholder: "New password (at least 8 characters)", autocomplete: "new-password" });
+    var iRep = UI.input({ type: "password", placeholder: "Repeat the new password", autocomplete: "new-password" });
+    var err = UI.el("div", { class: "login-err", text: "" });
+    var label = o.label || "Update password";
+    var go = UI.btn(label, submit, "btn-primary");
+    function submit() {
+      err.textContent = "";
+      if (iNew.value.length < 8) { err.textContent = "The new password must be at least 8 characters."; return; }
+      if (iNew.value !== iRep.value) { err.textContent = "The two new passwords do not match."; return; }
+      if (iNew.value === iOld.value) { err.textContent = "The new password must differ from the current one."; return; }
+      go.disabled = true; go.textContent = "Updating...";
+      /* Re-authenticate first: GoTrue refuses a password change on a stale
+         session, and signing in again also proves the current password is the
+         one the user typed before anything is written. */
+      SB.signIn(email, iOld.value).then(function () {
+        return SB.updateUser({ password: iNew.value });
+      }).then(function () {
+        /* A password equal to the employee ID is only temporary until its
+           owner replaces it, so clear the flag on our own row - 008 allows it
+           (id = auth.uid()). A failure here is not fatal: the prompt just
+           returns at the next sign-in. */
+        return o.clearTemp ? clearTempFlag() : null;
+      }).then(function () {
+        iOld.value = iNew.value = iRep.value = "";
+        o.onDone();
+      }).catch(function (e) {
+        go.disabled = false; go.textContent = label;
+        err.textContent = "Not changed: " + (/invalid login|password/i.test((e && e.message) || "")
+          ? "the current password is wrong" : (e && e.message) || e);
+      });
+    }
+    function clearTempFlag() {
+      return SB.patch("profiles", "id=eq." + myUid(),
+        { pw_temp: false, updated_at: new Date().toISOString() }).catch(function () { return null; });
+    }
+    return UI.el("div", {}, [
+      o.hint ? UI.el("p", { class: "muted", style: "margin:0 0 10px;font-size:12.8px", text: o.hint }) : null,
+      UI.field("Current password", iOld),
+      UI.field("New password", iNew),
+      UI.field("Repeat new password", iRep),
+      err,
+      UI.el("div", { class: "btn-row" }, [go, o.also || null])
+    ]);
+  }
+
+  /* Blocking gate: rendered instead of the app while the signed-in account is
+     still using its employee ID as its password. The only way forward is to
+     choose a private password; the only way out is to sign out. */
+  function forcePassword(root) {
+    var u = Store.get().meta.user || {};
+    root.appendChild(UI.pageHead("Set your own password",
+      (u.name || "This account") + "  (" + (u.role || "-") + ")  -  " + (myEmail() || ""), []));
+    root.appendChild(UI.card("Temporary password in use", null, UI.el("div", {}, [
+      UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
+        text: "An Admin reset this account to its employee ID. That number is on staff cards, so anyone " +
+          "who reads one could sign in as you and the audit trail would blame you for it. " +
+          "Choose a private password to continue - the rest of the app stays locked until you do." }),
+      passwordPanel({
+        label: "Set my password",
+        clearTemp: true,
+        also: UI.btn("Sign out", function () {
+          Sync.signOut().then(function () { location.reload(); });
+        }, "btn-danger"),
+        onDone: function () {
+          var pr = Sync.getProfile();
+          if (pr) pr.pw_temp = false;
+          UI.toast("Password updated - use it the next time you sign in", "ok");
+          App.refresh();
+        }
+      })
+    ])));
+  }
+
+  /* ---------- Own account ---------- */
   /* Opened from the top-right name chip for every signed-in role: rotating
      your own password is self-service, assigning one to somebody else is not
-     (and must stay that way - shared passwords are how the test accounts all
-     ended up as "test1234"). */
+     (shared passwords are how the test accounts all ended up identical). */
   function accountModal() {
     var u = Store.get().meta.user || {};
     var cloud = window.Sync && Sync.enabled();
@@ -199,42 +294,15 @@ window.ViewsUsers = (function () {
     ];
 
     if (signedIn) {
-      var iOld = UI.input({ type: "password", placeholder: "Current password", autocomplete: "current-password" });
-      var iNew = UI.input({ type: "password", placeholder: "New password (at least 8 characters)", autocomplete: "new-password" });
-      var iRep = UI.input({ type: "password", placeholder: "Repeat the new password", autocomplete: "new-password" });
-      var err = UI.el("div", { class: "login-err", text: "" });
-      var go = UI.btn("Update password", function () {
-        err.textContent = "";
-        if (iNew.value.length < 8) { err.textContent = "The new password must be at least 8 characters."; return; }
-        if (iNew.value !== iRep.value) { err.textContent = "The two new passwords do not match."; return; }
-        go.disabled = true; go.textContent = "Updating...";
-        /* Re-authenticate first: GoTrue refuses a password change on a stale
-           session, and signing in again also proves the current password is
-           the one the user typed before anything is written. */
-        SB.signIn(me, iOld.value).then(function () {
-          return SB.updateUser({ password: iNew.value });
-        }).then(function () {
-          UI.closeModal();
-          iOld.value = iNew.value = iRep.value = "";
-          UI.toast("Password updated - use it the next time you sign in", "ok");
-        }).catch(function (e) {
-          go.disabled = false; go.textContent = "Update password";
-          err.textContent = "Not changed: " + (/invalid login|password/i.test(e && e.message || "")
-            ? "the current password is wrong" : (e && e.message) || e);
-        });
-      }, "btn-primary");
-      var form = UI.el("div", {}, [
-        UI.el("p", { class: "muted", style: "margin:0 0 10px;font-size:12.8px",
-          text: "Changes only your own account. Nobody can set a password for somebody else from this app." }),
-        UI.field("Current password", iOld),
-        UI.field("New password", iNew),
-        UI.field("Repeat new password", iRep),
-        err,
-        UI.el("div", { class: "btn-row" }, [go])
-      ]);
       UI.modal({
         title: "My account",
-        body: UI.el("div", {}, [UI.el("div", { class: "kv" }, rows), UI.el("hr"), form]),
+        body: UI.el("div", {}, [UI.el("div", { class: "kv" }, rows), UI.el("hr"), passwordPanel({
+          hint: "Changes only your own account. Nobody can set a password for somebody else from this app.",
+          onDone: function () {
+            UI.closeModal();
+            UI.toast("Password updated - use it the next time you sign in", "ok");
+          }
+        })]),
         actions: []
       });
       return;
@@ -252,5 +320,5 @@ window.ViewsUsers = (function () {
     });
   }
 
-  return { staff: staff, accountModal: accountModal };
+  return { staff: staff, accountModal: accountModal, forcePassword: forcePassword };
 })();
