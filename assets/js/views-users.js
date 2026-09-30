@@ -218,10 +218,10 @@ window.ViewsUsers = (function () {
       SB.signIn(email, iOld.value).then(function () {
         return SB.updateUser({ password: iNew.value });
       }).then(function () {
-        /* A password equal to the employee ID is only temporary until its
-           owner replaces it, so clear the flag on our own row - 008 allows it
-           (id = auth.uid()). A failure here is not fatal: the prompt just
-           returns at the next sign-in. */
+        /* The one-time password an Admin handed out is temporary until its
+         owner replaces it, so clear the flag on our own row - 008 allows it
+         (id = auth.uid()). A failure here is not fatal: the prompt just
+         returns at the next sign-in. */
         return o.clearTemp ? clearTempFlag() : null;
       }).then(function () {
         iOld.value = iNew.value = iRep.value = "";
@@ -247,16 +247,16 @@ window.ViewsUsers = (function () {
   }
 
   /* Blocking gate: rendered instead of the app while the signed-in account is
-     still using its employee ID as its password. The only way forward is to
-     choose a private password; the only way out is to sign out. */
+     still using a one-time password an Admin handed out. The only way forward
+     is to choose a private password; the only way out is to sign out. */
   function forcePassword(root) {
     var u = Store.get().meta.user || {};
     root.appendChild(UI.pageHead("Set your own password",
       (u.name || "This account") + "  (" + (u.role || "-") + ")  -  " + (myEmail() || ""), []));
     root.appendChild(UI.card("Temporary password in use", null, UI.el("div", {}, [
       UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
-        text: "An Admin reset this account to its employee ID. That number is on staff cards, so anyone " +
-          "who reads one could sign in as you and the audit trail would blame you for it. " +
+        text: "An Admin reset this account and handed out a one-time password. Somebody else typed it and " +
+          "it may be in their notes, so it is not truly yours until you replace it. " +
           "Choose a private password to continue - the rest of the app stays locked until you do." }),
       passwordPanel({
         label: "Set my password",

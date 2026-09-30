@@ -153,9 +153,10 @@ window.App = (function () {
     Store.runExpiryAudit();
     updateUserChip();
     updateSyncChip();
-    /* An Admin reset this account to its employee ID. Nothing else renders and
-       the sidenav stays empty, because a number printed on a staff card is not
-       a password and every audit entry made with it would blame its owner. */
+    /* An Admin reset this account and handed out a one-time password. Nothing
+       else renders and the sidenav stays empty, because a password somebody
+       else typed for you is not yours - every audit entry made with it would
+       blame you until you replace it. */
     var pr = window.Sync && Sync.getProfile && Sync.getProfile();
     if (pr && pr.pw_temp) {
       ViewsUsers.forcePassword(UI.clear(document.getElementById("view")));
@@ -246,8 +247,8 @@ window.App = (function () {
         UI.el("div", { class: "login-title", text: "Too many failed attempts" }),
         UI.el("div", { class: "login-sub", text: "This sign-in screen has stopped after " + LOGIN_MAX_FAILS + " failed attempts." }),
         UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
-          text: "Contact Admin and ask for a password reset - your password is reset to your employee ID " +
-            "and you will be asked to choose a new one on your next sign-in."
+          text: "Contact Admin and ask for a password reset - they will hand you a one-time password, " +
+            "and you will be asked to choose your own on your next sign-in."
         }),
         UI.el("p", { class: "muted", style: "margin:0 0 12px;font-size:12.5px",
           text: "Last error: " + lastMsg }),

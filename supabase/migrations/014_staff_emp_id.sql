@@ -1,23 +1,23 @@
 -- ============================================================
 --  014 - STAFF EMPLOYEE ID + TEMPORARY-PASSWORD FLAG
---  The Master User page (Admin only) can now hand a forgotten password
---  back, and the value it hands back is the person's employee ID, so
---  that ID has to live in the database:
---    emp_id   text     - staff number, and the temporary password
---    pw_temp  boolean  - true while the account is still using it
+--  Two supporting columns for staff-account management on the Master User
+--  page (Admin only):
+--    emp_id   text     - the person's staff number (reference only)
+--    pw_temp  boolean  - true while the account is still on a one-time
+--                        password an Admin handed out and has not replaced
 --
---  Why a flag instead of comparing the password: only GoTrue can see
---  the hash and the app never asks it "is this still the default?".
---  Whoever performs the reset sets pw_temp; the client clears it on its
---  OWN row after a successful PUT /auth/v1/user, which 008's
---  profiles_update already permits (id = auth.uid()).
+--  When an Admin resets a forgotten password they generate a RANDOM one-time
+--  password (see supabase/create-user.ps1 -ResetPassword) and set pw_temp; the
+--  app then blocks the account until its owner chooses a private password. The
+--  owner clears pw_temp on their OWN row after a successful PUT /auth/v1/user,
+--  which 008's profiles_update already permits (id = auth.uid()). A flag is
+--  used instead of inspecting the password because only GoTrue can see the hash.
 --
 --  emp_id is visible to every signed-in staff member because 008's
---  profiles_select is using (true). Treat the number as internal - it is
---  also a password until its owner changes it once. The partial unique
---  index below stops two people sharing one ID (and therefore one
---  password) while still allowing the empty string on accounts that have
---  not been given a number yet.
+--  profiles_select is using (true); it is an internal reference number, no
+--  longer a credential. The partial unique index below stops two people
+--  sharing one staff number while still allowing the empty string on accounts
+--  that have not been given a number yet.
 --
 --  Run ONCE in: Supabase Dashboard > SQL Editor (the anon key cannot
 --  execute DDL). Idempotent - safe to re-run. Depends on schema.sql.
