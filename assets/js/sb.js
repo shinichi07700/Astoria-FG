@@ -43,10 +43,24 @@ window.SB = (function () {
       return j;
     });
   }
-  function authPost(path, body) {
+  function authRequest(method, path, body, withAuth) {
     return fetch(cfg.url + "/auth/v1/" + path, {
-      method: "POST", headers: headers(false), body: JSON.stringify(body)
+      method: method, headers: headers(!!withAuth),
+      body: body === undefined ? undefined : JSON.stringify(body)
     }).then(parse);
+  }
+  function authPost(path, body) {
+    return authRequest("POST", path, body, false);
+  }
+  /* GoTrue self-service update: PUT /auth/v1/user carries the caller's own
+     access token, so it can only ever change the signed-in account (used here
+     to change your own password). Touching anybody ELSE's account needs the
+     /auth/v1/admin API and the service_role key, which must never reach a
+     browser - that is why this app cannot create or delete staff accounts. */
+  function updateUser(body) {
+    return ensureToken().then(function () {
+      return authRequest("PUT", "user", body, true);
+    });
   }
   function adopt(j, fallbackEmail) {
     session = {
@@ -118,6 +132,12 @@ window.SB = (function () {
     if (!rows || !rows.length) return Promise.resolve(null);
     return rest("POST", table, rows, { Prefer: "resolution=merge-duplicates,return=minimal" });
   }
+  /* Filtered single-row update. A PATCH with no filter rewrites the whole
+     table, so refuse rather than rely on every caller remembering one. */
+  function patch(table, filter, body) {
+    if (!filter) return Promise.reject(new Error("SB.patch requires a filter"));
+    return rest("PATCH", table + "?" + filter, body, { Prefer: "return=representation" });
+  }
   function insert(table, rows) {
     if (!rows || !rows.length) return Promise.resolve(null);
     return rest("POST", table, rows, { Prefer: "return=minimal" });
@@ -128,8 +148,8 @@ window.SB = (function () {
 
   return {
     init: init, enabled: enabled, restore: restore, me: me,
-    signIn: signIn, signOut: signOut, ensureToken: ensureToken,
+    signIn: signIn, signOut: signOut, ensureToken: ensureToken, updateUser: updateUser,
     selectAll: selectAll, hasColumn: hasColumn,
-    upsert: upsert, insert: insert, remove: remove
+    upsert: upsert, patch: patch, insert: insert, remove: remove
   };
 })();

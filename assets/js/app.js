@@ -22,6 +22,7 @@ window.App = (function () {
     { id: "production", label: "Production", group: "Production" },
     { id: "qa", label: "QA / QC", group: "Production" },
     { id: "audit", label: "Audit Log", group: "Control" },
+    { id: "users", label: "Master User", group: "Control" },
     { id: "settings", label: "Settings & Data", group: "Control" }
   ];
   var RENDER = {
@@ -43,6 +44,7 @@ window.App = (function () {
     production: function (r) { ViewsProduction.list(r); },
     qa: function (r) { ViewsQA.list(r); },
     audit: function (r) { ViewsSim.audit(r); },
+    users: function (r) { ViewsUsers.staff(r); },
     settings: function (r) { ViewsSim.settings(r); }
   };
   var current = "dashboard";
@@ -54,11 +56,19 @@ window.App = (function () {
   function isAdmin() { return RBAC.isAdmin(); }
   function canOpenSettings() { return isAdmin() || !(window.Sync && Sync.enabled()); }
 
+  /* Master User is the roster of cloud staff accounts, so unlike Settings it
+     has no local-mode exception - there is nothing to list without a signed-in
+     Supabase account. Admin only, and hidden from the nav for everyone else. */
+  function canOpenUsers() {
+    return isAdmin() && !!(window.Sync && Sync.enabled()) && !!(window.SB && SB.me());
+  }
+
   function renderNav() {
     var nav = UI.clear(document.getElementById("sidenav"));
     var lastGroup = null;
     NAV.forEach(function (n) {
       if (n.id === "settings" && !canOpenSettings()) return;
+      if (n.id === "users" && !canOpenUsers()) return;
       if (n.group !== lastGroup) {
         nav.appendChild(UI.el("div", { class: "nav-group-label", text: n.group }));
         lastGroup = n.group;
@@ -74,6 +84,7 @@ window.App = (function () {
 
   function go(id) {
     if (id === "settings" && !canOpenSettings()) id = "dashboard";
+    if (id === "users" && !canOpenUsers()) id = "dashboard";
     if (id !== "bom") ViewsBom.resetEditor();
     closeDrawer();
     current = id;
@@ -92,9 +103,7 @@ window.App = (function () {
     var u = Store.get().meta.user;
     var chip = document.getElementById("user-chip");
     chip.textContent = u.name + "  ·  " + u.role;
-    chip.title = canOpenSettings()
-      ? (u.email || "no email") + " - click to open Settings & Data"
-      : (u.email || "no email") + " - signed in as " + u.role;
+    chip.title = (u.email || "no email") + " - click for your account and password";
     var lo = document.getElementById("logout-btn");
     if (lo) lo.hidden = !(window.Sync && Sync.enabled() && window.SB && SB.me());
   }
@@ -118,8 +127,9 @@ window.App = (function () {
 
   function wireChrome() {
     document.getElementById("user-chip").addEventListener("click", function () {
-      if (canOpenSettings()) go("settings");
-      else UI.toast("Settings & Data is only available to Admin", "err");
+      /* Self-service account box (own password) for every role - Settings is
+         reached from the nav, and Master User is Admin-only. */
+      ViewsUsers.accountModal();
     });
     document.getElementById("logout-btn").addEventListener("click", function () {
       UI.confirmDialog("Sign out of the cloud account? Queued local changes stay on this device.", function () {
@@ -207,7 +217,7 @@ window.App = (function () {
     iPass.addEventListener("keydown", function (e) { if (e.key === "Enter") btn.click(); });
   }
 
-  return { go: go, refresh: refresh, boot: boot, updateUserChip: updateUserChip };
+  return { go: go, refresh: refresh, boot: boot, updateUserChip: updateUserChip, renderNav: renderNav };
 })();
 
 document.addEventListener("DOMContentLoaded", App.boot);
