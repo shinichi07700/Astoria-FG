@@ -153,6 +153,13 @@ window.App = (function () {
     Store.runExpiryAudit();
     updateUserChip();
     updateSyncChip();
+    /* Arrived from a "forgot password" email link: force a new password before
+       anything else renders. Checked before pw_temp because a recovery session
+       is self-service and never sets that flag. */
+    if (window.SB && SB.inRecovery && SB.inRecovery()) {
+      ViewsUsers.forcePassword(UI.clear(document.getElementById("view")), { recovery: true });
+      return;
+    }
     /* An Admin reset this account and handed out a one-time password. Nothing
        else renders and the sidenav stays empty, because a password somebody
        else typed for you is not yours - every audit entry made with it would
@@ -192,17 +199,25 @@ window.App = (function () {
     chip.dataset.s = s;
   }
 
-  var LOGIN_MAX_FAILS = 5;
-
-  /* Counting failures here is guidance, not security: a reload, another device
-     or a direct REST call all reset it. Supabase's own limit on /auth/v1/token
-     (per IP, 150 per 5 minutes by default) is the enforced one. The point is to
-     stop a staff member typing the same wrong password twenty times and to send
-     them to the Admin instead of opening a support ticket by accident. */
+  /* Login screen: two cards swapped in place - sign-in, and self-service
+     password recovery. No attempt counter / lockout: a forgotten password is
+     solved by the "Forgot your password?" link (an emailed reset), not by
+     bugging an Admin, so a hard lock would only add a dead end. GoTrue's own
+     per-IP rate limit on /auth/v1/token is the real throttle. */
   function renderLogin() {
     document.body.classList.add("login-mode");
     var view = UI.clear(document.getElementById("view"));
-    var fails = 0;
+    var wrap = UI.el("div", { class: "login-wrap" });
+    view.appendChild(wrap);
+    signInCard(wrap);
+  }
+
+  function loginLogo() {
+    return UI.el("img", { class: "login-logo", src: "assets/img/logo.png", alt: "PT Astoria Prima" });
+  }
+
+  function signInCard(wrap) {
+    UI.clear(wrap);
     var err = UI.el("div", { class: "login-err", text: "" });
     var iEmail = UI.input({ type: "email", placeholder: "name@astoriaprima.com" });
     var iPass = UI.input({ type: "password", placeholder: "Your password" });
@@ -213,48 +228,67 @@ window.App = (function () {
         finishBoot();
         UI.toast("Signed in to the Astoria cloud", "ok");
       }, function (msg) {
-        msg = msg || "Sign-in failed";
-        fails++;
-        if (fails >= LOGIN_MAX_FAILS) { loginLocked(msg); return; }
-        err.textContent = msg + " - " + (LOGIN_MAX_FAILS - fails) +
-          " attempt" + (LOGIN_MAX_FAILS - fails === 1 ? "" : "s") + " left on this screen";
+        err.textContent = msg || "Sign-in failed";
         btn.disabled = false;
       });
     }, "btn-primary");
-    view.appendChild(UI.el("div", { class: "login-wrap" }, [
-      UI.el("div", { class: "login-card" }, [
-        UI.el("img", { class: "login-logo", src: "assets/img/logo.png", alt: "PT Astoria Prima" }),
-        UI.el("div", { class: "login-title", text: "Staff sign in" }),
-        UI.el("div", {
-          class: "login-sub",
-          text: "Master F/G, BOM and MR/PR data lives in the company Supabase cloud. Sign in with your staff account."
-        }),
-        UI.field("Email", iEmail),
-        UI.field("Password", iPass),
-        err,
-        btn
+    wrap.appendChild(UI.el("div", { class: "login-card" }, [
+      loginLogo(),
+      UI.el("div", { class: "login-title", text: "Staff sign in" }),
+      UI.el("div", {
+        class: "login-sub",
+        text: "Master F/G, BOM and MR/PR data lives in the company Supabase cloud. Sign in with your staff account."
+      }),
+      UI.field("Email", iEmail),
+      UI.field("Password", iPass),
+      err,
+      btn,
+      UI.el("div", { class: "login-alt" }, [
+        UI.el("a", {
+          href: "#", class: "login-forgot", text: "Forgot your password?",
+          onclick: function (e) { e.preventDefault(); recoveryCard(wrap); }
+        })
       ])
     ]));
     iPass.addEventListener("keydown", function (e) { if (e.key === "Enter") btn.click(); });
-    if (fails === 1 && iEmail.value) iPass.focus();
   }
 
-  function loginLocked(lastMsg) {
-    var view = UI.clear(document.getElementById("view"));
-    view.appendChild(UI.el("div", { class: "login-wrap" }, [
-      UI.el("div", { class: "login-card" }, [
-        UI.el("img", { class: "login-logo", src: "assets/img/logo.png", alt: "PT Astoria Prima" }),
-        UI.el("div", { class: "login-title", text: "Too many failed attempts" }),
-        UI.el("div", { class: "login-sub", text: "This sign-in screen has stopped after " + LOGIN_MAX_FAILS + " failed attempts." }),
-        UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
-          text: "Contact Admin and ask for a password reset - they will hand you a one-time password, " +
-            "and you will be asked to choose your own on your next sign-in."
-        }),
-        UI.el("p", { class: "muted", style: "margin:0 0 12px;font-size:12.5px",
-          text: "Last error: " + lastMsg }),
-        UI.el("div", { class: "btn-row" }, [
-          UI.btn("Try a different account", function () { renderLogin(); }, "btn-primary")
-        ])
+  function recoveryCard(wrap) {
+    UI.clear(wrap);
+    var err = UI.el("div", { class: "login-err", text: "" });
+    var ok = UI.el("div", { class: "login-ok", text: "" });
+    var iEmail = UI.input({ type: "email", placeholder: "name@astoriaprima.com" });
+    var btn = UI.btn("Send reset link", function () {
+      var email = iEmail.value.trim();
+      err.textContent = ""; ok.textContent = "";
+      if (!email) { err.textContent = "Enter the email you sign in with."; return; }
+      btn.disabled = true;
+      /* redirectTo is this page without any hash; it must be in the project's
+         Redirect URLs allow-list or GoTrue rejects the request. */
+      SB.requestRecovery(email, window.location.href.split("#")[0]).then(function () {
+        ok.textContent = "If that email is on file, a reset link is on its way - check your inbox " +
+          "(and spam). Open it to choose a new password; you won't need to contact anyone.";
+        btn.textContent = "Reset link sent";
+      }).catch(function (e) {
+        err.textContent = (e && e.message) || "Could not send the reset link. Contact Admin if this keeps happening.";
+        btn.disabled = false;
+      });
+    }, "btn-primary");
+    wrap.appendChild(UI.el("div", { class: "login-card" }, [
+      loginLogo(),
+      UI.el("div", { class: "login-title", text: "Reset your password" }),
+      UI.el("div", {
+        class: "login-sub",
+        text: "Enter your work email and we'll send a link to choose a new password yourself."
+      }),
+      UI.field("Your email", iEmail),
+      err, ok,
+      btn,
+      UI.el("div", { class: "login-alt" }, [
+        UI.el("a", {
+          href: "#", class: "login-forgot", text: "Back to sign in",
+          onclick: function (e) { e.preventDefault(); signInCard(wrap); }
+        })
       ])
     ]));
   }

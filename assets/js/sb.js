@@ -5,10 +5,12 @@
 window.SB = (function () {
   var cfg = null;
   var session = null;
+  var recovery = false;
   var SKEY = "astoria_sb_session";
 
   function init(url, key) {
     cfg = { url: String(url || "").replace(/\/+$/, ""), key: String(key || "") };
+    adoptRecoveryFromHash();
   }
   function enabled() { return !!(cfg && cfg.url && cfg.key); }
 
@@ -90,6 +92,55 @@ window.SB = (function () {
       .then(function (j) { return adopt(j); });
   }
 
+  /* ---------- self-service password recovery ---------- */
+  /* GoTrue's "forgot password" email link returns the session in the URL hash
+     (implicit flow): #access_token=...&refresh_token=...&expires_in=...&type=recovery
+     Adopt it as the session and remember we are mid-recovery so the app drops
+     the user straight into "choose a new password" instead of the login screen.
+     The hash carries no user id/email, so resolveRecovery() fetches those
+     before the profile is read. */
+  function adoptRecoveryFromHash() {
+    var h = window.location.hash || "";
+    if (h.charAt(0) === "#") h = h.slice(1);
+    if (!h) return;
+    var p = {};
+    h.split("&").forEach(function (kv) {
+      var i = kv.indexOf("=");
+      if (i > 0) p[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1));
+    });
+    if (p.type !== "recovery" || !p.access_token) return;
+    session = {
+      uid: "", email: "",
+      access_token: p.access_token,
+      refresh_token: p.refresh_token || "",
+      expires_at: Date.now() + (parseInt(p.expires_in, 10) || 3600) * 1000
+    };
+    persist();
+    recovery = true;
+    /* Strip the hash so a reload cannot re-trigger recovery and the token is
+       not left sitting in the address bar / browser history. */
+    try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) {}
+  }
+  /* Fill in the identity the recovery hash could not carry, so ensureProfile()
+     has a uid to look up. No-op (and safe) when we are not in recovery. */
+  function resolveRecovery() {
+    if (!recovery || !session) return Promise.resolve(session);
+    return authRequest("GET", "user", undefined, true).then(function (u) {
+      if (u && u.id) { session.uid = u.id; session.email = u.email || session.email || ""; persist(); }
+      return session;
+    }).catch(function () { return session; });
+  }
+  function inRecovery() { return !!recovery; }
+  function clearRecovery() { recovery = false; }
+  /* Ask GoTrue to email a recovery link. The anon key is enough - this is a
+     public endpoint. redirectTo MUST be in the project's Redirect URLs
+     allow-list or GoTrue rejects it. Resolves identically for unknown addresses
+     (GoTrue never reveals whether the email exists), so callers show one
+     non-committal message either way. */
+  function requestRecovery(email, redirectTo) {
+    return authPost("recover", { email: email, redirectTo: redirectTo });
+  }
+
   /* ---------- PostgREST ---------- */
   function rest(method, path, body, extra) {
     return ensureToken().then(function () {
@@ -149,6 +200,8 @@ window.SB = (function () {
   return {
     init: init, enabled: enabled, restore: restore, me: me,
     signIn: signIn, signOut: signOut, ensureToken: ensureToken, updateUser: updateUser,
+    requestRecovery: requestRecovery, resolveRecovery: resolveRecovery,
+    inRecovery: inRecovery, clearRecovery: clearRecovery,
     selectAll: selectAll, hasColumn: hasColumn,
     upsert: upsert, patch: patch, insert: insert, remove: remove
   };

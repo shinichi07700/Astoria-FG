@@ -52,7 +52,7 @@ window.ViewsUsers = (function () {
     }, [
       UI.el("div", { text: "Rename / re-role" }), UI.el("div", { text: "Yes - saved to profiles, audited below." }),
       UI.el("div", { text: "Create an account" }), UI.el("div", { text: "No - run supabase\\create-user.ps1, or Authentication > Add user in the Dashboard." }),
-      UI.el("div", { text: "Reset someone's password" }), UI.el("div", { text: "No - staff change their own password from the name chip at the top right." }),
+      UI.el("div", { text: "Reset someone's password" }), UI.el("div", { text: "No - each person changes their own (name chip, or 'Forgot your password?' on the sign-in screen)." }),
       UI.el("div", { text: "Revoke access" }), UI.el("div", {
         text: "Not from a browser - delete the account in the Dashboard. Deleting only the profile row does NOT sign anyone out."
       })
@@ -194,13 +194,14 @@ window.ViewsUsers = (function () {
   }
 
   /* ---------- Own password ---------- */
-  /* One form, two entry points: the optional "My account" box opened from the
-     name chip, and the blocking must-change screen shown when an Admin has
-     reset this account to its employee ID.
-     o = { label, hint, clearTemp, also, onDone } */
+  /* One form, three entry points: the optional "My account" box opened from the
+     name chip, the blocking must-change screen shown while pw_temp is set, and
+     the same screen reached from a "forgot password" email link (recovery).
+     o = { label, hint, recovery, clearTemp, also, onDone } */
   function passwordPanel(o) {
     var email = myEmail();
-    var iOld = UI.input({ type: "password", placeholder: "Current password", autocomplete: "current-password" });
+    var recovery = !!o.recovery;
+    var iOld = recovery ? null : UI.input({ type: "password", placeholder: "Current password", autocomplete: "current-password" });
     var iNew = UI.input({ type: "password", placeholder: "New password (at least 8 characters)", autocomplete: "new-password" });
     var iRep = UI.input({ type: "password", placeholder: "Repeat the new password", autocomplete: "new-password" });
     var err = UI.el("div", { class: "login-err", text: "" });
@@ -210,25 +211,30 @@ window.ViewsUsers = (function () {
       err.textContent = "";
       if (iNew.value.length < 8) { err.textContent = "The new password must be at least 8 characters."; return; }
       if (iNew.value !== iRep.value) { err.textContent = "The two new passwords do not match."; return; }
-      if (iNew.value === iOld.value) { err.textContent = "The new password must differ from the current one."; return; }
+      if (!recovery && iNew.value === iOld.value) { err.textContent = "The new password must differ from the current one."; return; }
       go.disabled = true; go.textContent = "Updating...";
       /* Re-authenticate first: GoTrue refuses a password change on a stale
          session, and signing in again also proves the current password is the
-         one the user typed before anything is written. */
-      SB.signIn(email, iOld.value).then(function () {
+         one the user typed before anything is written. In recovery mode the
+         emailed link already authenticated this session, so skip straight to
+         the update. */
+      var auth = recovery ? Promise.resolve() : SB.signIn(email, iOld.value);
+      auth.then(function () {
         return SB.updateUser({ password: iNew.value });
       }).then(function () {
         /* The one-time password an Admin handed out is temporary until its
-         owner replaces it, so clear the flag on our own row - 008 allows it
-         (id = auth.uid()). A failure here is not fatal: the prompt just
-         returns at the next sign-in. */
+           owner replaces it, so clear the flag on our own row - 008 allows it
+           (id = auth.uid()). A failure here is not fatal: the prompt just
+           returns at the next sign-in. Recovery never set pw_temp, so it skips
+           this. */
         return o.clearTemp ? clearTempFlag() : null;
       }).then(function () {
-        iOld.value = iNew.value = iRep.value = "";
+        iNew.value = iRep.value = "";
+        if (iOld) iOld.value = "";
         o.onDone();
       }).catch(function (e) {
         go.disabled = false; go.textContent = label;
-        err.textContent = "Not changed: " + (/invalid login|password/i.test((e && e.message) || "")
+        err.textContent = "Not changed: " + (!recovery && /invalid login|password/i.test((e && e.message) || "")
           ? "the current password is wrong" : (e && e.message) || e);
       });
     }
@@ -238,7 +244,7 @@ window.ViewsUsers = (function () {
     }
     return UI.el("div", {}, [
       o.hint ? UI.el("p", { class: "muted", style: "margin:0 0 10px;font-size:12.8px", text: o.hint }) : null,
-      UI.field("Current password", iOld),
+      recovery ? null : UI.field("Current password", iOld),
       UI.field("New password", iNew),
       UI.field("Repeat new password", iRep),
       err,
@@ -246,28 +252,41 @@ window.ViewsUsers = (function () {
     ]);
   }
 
-  /* Blocking gate: rendered instead of the app while the signed-in account is
-     still using a one-time password an Admin handed out. The only way forward
-     is to choose a private password; the only way out is to sign out. */
-  function forcePassword(root) {
+  /* Blocking gate: rendered instead of the app in two cases - the account is
+     still on a one-time password an Admin handed out (pw_temp), or the user
+     just arrived from a "forgot password" email link (recovery). Either way the
+     only way forward is to choose a private password; the only way out is to
+     cancel / sign out. */
+  function forcePassword(root, opts) {
+    opts = opts || {};
+    var recovery = !!opts.recovery;
     var u = Store.get().meta.user || {};
-    root.appendChild(UI.pageHead("Set your own password",
+    root.appendChild(UI.pageHead(recovery ? "Choose a new password" : "Set your own password",
       (u.name || "This account") + "  (" + (u.role || "-") + ")  -  " + (myEmail() || ""), []));
-    root.appendChild(UI.card("Temporary password in use", null, UI.el("div", {}, [
+    root.appendChild(UI.card(recovery ? "Reset your password" : "Temporary password in use", null, UI.el("div", {}, [
       UI.el("p", { style: "margin:0 0 12px;font-size:13px;line-height:1.6",
-        text: "An Admin reset this account and handed out a one-time password. Somebody else typed it and " +
-          "it may be in their notes, so it is not truly yours until you replace it. " +
-          "Choose a private password to continue - the rest of the app stays locked until you do." }),
+        text: recovery
+          ? "You opened a password-reset link from your email, so you are signed in and ready to choose a " +
+            "new password. Nothing else is available until you set one."
+          : "An Admin reset this account and handed out a one-time password. Somebody else typed it and " +
+            "it may be in their notes, so it is not truly yours until you replace it. " +
+            "Choose a private password to continue - the rest of the app stays locked until you do." }),
       passwordPanel({
-        label: "Set my password",
-        clearTemp: true,
-        also: UI.btn("Sign out", function () {
+        label: recovery ? "Set my new password" : "Set my password",
+        recovery: recovery,
+        clearTemp: !recovery,
+        also: UI.btn(recovery ? "Cancel" : "Sign out", function () {
           Sync.signOut().then(function () { location.reload(); });
         }, "btn-danger"),
         onDone: function () {
-          var pr = Sync.getProfile();
-          if (pr) pr.pw_temp = false;
-          UI.toast("Password updated - use it the next time you sign in", "ok");
+          if (recovery) {
+            SB.clearRecovery();
+            UI.toast("Password updated - you are signed in", "ok");
+          } else {
+            var pr = Sync.getProfile();
+            if (pr) pr.pw_temp = false;
+            UI.toast("Password updated - use it the next time you sign in", "ok");
+          }
           App.refresh();
         }
       })

@@ -791,6 +791,10 @@ body.login-mode .topbar-right { display: none; }
 .login-title { font-family: var(--serif); font-size: 24px; color: var(--accent-dark); text-align: center; }
 .login-sub { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.55; margin: 6px 0 14px; }
 .login-err { min-height: 18px; color: var(--red); font-size: 12px; font-weight: 600; margin: 2px 0 6px; }
+.login-ok { color: var(--green); font-size: 12px; font-weight: 600; line-height: 1.5; margin: 2px 0 6px; }
+.login-alt { text-align: center; margin-top: 10px; }
+.login-forgot { color: var(--accent-dark); font-size: 12.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.login-forgot:hover { text-decoration: underline; }
 .login-card .btn { justify-content: center; padding: 10px; }
 .sync-chip { cursor: pointer; font-weight: 700; border-style: solid; }
 .sync-chip[data-s="cloud"] { color: var(--green); border-color: #bfe3cf; background: var(--green-soft); }

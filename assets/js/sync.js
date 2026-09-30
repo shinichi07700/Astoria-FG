@@ -903,7 +903,11 @@ window.Sync = (function () {
     if (!SB.restore()) { setStatus("login"); cb("login"); return; }
     localSnapshot = JSON.parse(JSON.stringify(Store.get()));
     localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials || []).length;
-    bootFromCloud(cb);
+    /* A password-recovery link adopts a session whose hash carried no uid/email;
+       resolve that identity before bootFromCloud reads the profile. No-op for a
+       normal restored session. */
+    var ready = SB.resolveRecovery ? SB.resolveRecovery() : Promise.resolve();
+    ready.then(function () { bootFromCloud(cb); });
   }
   function bootFromCloud(cb) {
     ensureProfile()
