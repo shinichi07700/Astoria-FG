@@ -188,6 +188,33 @@ window.RBAC = (function () {
     return (e && e.lockAfter && e.lockAfter[status]) || [];
   }
 
+  /* ---------- dashboard activity-feed visibility ----------
+     Each role sees only entities relevant to their function.
+     Admin sees everything. The keys match the entity strings used in
+     Store.audit() calls across the codebase. */
+  var DASH_ENTITIES = {
+    "RND Formula":  ["Master F/G", "Master Formula (FFS)", "Bill of Material"],
+    "RND Kemas":    ["Master F/G", "Master Packaging (FPS)", "Bill of Material"],
+    "Regulatory":   ["Master F/G"],
+    "Marketing":    ["Master Customer", "Sales Order", "Master F/G"],
+    "PPIC":         ["Bill of Material", "PPIC Netting", "Sales Order", "Purchase Request",
+                     "Material Request", "Order Simulation", "Mixer catalogue"],
+    "Purchasing":   ["Master Supplier", "Master Material", "Purchase Order", "Inventory Lot",
+                     "Purchase Request"],
+    "Warehouse":    ["Inventory Lot", "Staging", "FG Receipt", "Delivery Order",
+                     "Purchase Order"],
+    "Production":   ["BMR Phase", "Bulk WO", "BTIP Transfer", "Pack WO", "Staging",
+                     "Line Clearance", "Mixer catalogue"],
+    "QA":           ["Line Clearance", "IPC Record", "Release", "Bulk WO", "Pack WO",
+                     "Inventory Lot", "BTIP Transfer"],
+    "Finance":      ["Purchase Order", "Sales Order", "Delivery Order", "FG Receipt"]
+  };
+  function canSeeActivity(entity) {
+    if (isAdmin()) return true;
+    var list = DASH_ENTITIES[role()] || [];
+    return list.indexOf(entity) >= 0;
+  }
+
   return {
     ROLES: ROLES, FG_EDITOR_ROLES: FG_EDITOR_ROLES, FG_FIELD_RIGHTS: FG_FIELD_RIGHTS,
     MASTER_EDITORS: MASTER_EDITORS, SO_EDITORS: SO_EDITORS, PPIC_PLANNERS: PPIC_PLANNERS, STATES: STATES,
@@ -200,6 +227,7 @@ window.RBAC = (function () {
     canPurchase: canPurchase, canReceive: canReceive, canReleaseLot: canReleaseLot, canStage: canStage,
     canInspect: canInspect, canProduce: canProduce, canRelease: canRelease,
     canReceiveFg: canReceiveFg, canDeliver: canDeliver,
+    DASH_ENTITIES: DASH_ENTITIES, canSeeActivity: canSeeActivity,
     transitionsFrom: transitionsFrom, lockedGroups: lockedGroups
   };
 })();

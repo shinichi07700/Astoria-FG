@@ -50,13 +50,13 @@ window.ViewsPpic = (function () {
       return [f.id, f.kodeFG + "  -  " + (f.deskripsi || "")];
     })), "", "Type to search Finish Good...");
     var iQty = UI.input({ type: "number", step: "1", min: "1", value: "1000" });
-    var iNetto = UI.input({ type: "number", step: "0.0001", min: "0", value: "0.1" });
+    var iNetto = UI.input({ type: "number", step: "0.0001", min: "0", value: "0.1", disabled: true, style: "background:#f4f5f7;color:var(--muted);cursor:not-allowed" });
     var iDeliv = UI.input({ type: "date", value: Engine.todayISO() });
     var manualBlock = UI.el("div", { class: "form-grid" }, [
-      UI.field("Finish Good", iFg, "Only Aktif SKUs with a production BOM."),
+      UI.field("Finish Good", iFg, "Only Active SKUs with a production BOM."),
       UI.field("Order Qty (pcs)", iQty),
-      UI.field("Netto per unit (kg)", iNetto),
-      UI.field("Delivery date", iDeliv)
+      UI.field("Netto/unit (kg, from BOM)", iNetto),
+      UI.field("Delivery Date", iDeliv)
     ]);
 
     /* ---- common planning parameters ---- */
@@ -79,11 +79,13 @@ window.ViewsPpic = (function () {
       if (!s) { iBj.value = "1"; return; }
       var f = Store.fgById(s.fgId);
       iBj.value = String(resolveBj(s.fgId));
+      var bom = Store.bomByFg(s.fgId);
+      var derivedNetto = bom && bom.batchYield ? Engine.fmtNum(parseFloat(bom.batchSize) / Number(bom.batchYield)) : "0";
       [
         ["Finish Good", f ? (f.kodeFG + " - " + (f.deskripsi || "")) : (s.fgId || "-")],
         ["Customer", (Store.customerById(s.customerId) || {}).name || "-"],
-        ["Order qty", Engine.fmtNum(s.orderQty, 0) + " pcs"],
-        ["Netto / unit", Engine.fmtNum(s.nettoPerUnit) + " kg"],
+        ["Order Qty", Engine.fmtNum(s.orderQty, 0) + " pcs"],
+        ["Netto/unit (from BOM)", derivedNetto + " kg"],
         ["Delivery", s.deliveryDate || "-"],
         ["Status", s.status || "Draft"]
       ].forEach(function (p) {
@@ -93,7 +95,11 @@ window.ViewsPpic = (function () {
     }
     modeSel.addEventListener("change", syncMode);
     iSo.addEventListener("change", onSoPick);
-    iFg.addEventListener("change", function () { iBj.value = String(resolveBj(iFg.value)); });
+    iFg.addEventListener("change", function () {
+      iBj.value = String(resolveBj(iFg.value));
+      var b = iFg.value ? Store.bomByFg(iFg.value) : null;
+      iNetto.value = b && b.batchYield ? (parseFloat(b.batchSize) / Number(b.batchYield)).toFixed(4) : "";
+    });
 
     var resultWrap = UI.el("div");
     resultWrapEl = resultWrap;
@@ -119,14 +125,20 @@ window.ViewsPpic = (function () {
       if (mode === "so") {
         so = Store.soById(iSo.value);
         if (!so) { UI.toast("Select a sales order", "err"); return null; }
-        fgId = so.fgId; qty = Number(so.orderQty) || 0; netto = Number(so.nettoPerUnit) || 0; deliv = so.deliveryDate || "";
+        fgId = so.fgId; qty = Number(so.orderQty) || 0; deliv = so.deliveryDate || "";
+        var bomForNetto = Store.bomByFg(so.fgId);
+        netto = bomForNetto && bomForNetto.batchYield ? (parseFloat(bomForNetto.batchSize) / Number(bomForNetto.batchYield)) : 0;
       } else {
         fgId = iFg.value; qty = Number(iQty.value) || 0; netto = Number(iNetto.value) || 0; deliv = iDeliv.value;
+        if (!netto && fgId) {
+          var bomM = Store.bomByFg(fgId);
+          netto = bomM && bomM.batchYield ? (parseFloat(bomM.batchSize) / Number(bomM.batchYield)) : 0;
+        }
       }
       var fg = Store.fgById(fgId);
       if (!fg) { UI.toast("Select a Finish Good", "err"); return null; }
       if (qty <= 0) { UI.toast("Order quantity must be positive", "err"); return null; }
-      if (netto <= 0) { UI.toast("Netto per unit must be greater than zero", "err"); return null; }
+      if (netto <= 0) { UI.toast("Netto per unit must be greater than zero (check BOM batch size and yield)", "err"); return null; }
       if (!deliv) { UI.toast("Delivery date is required", "err"); return null; }
       var bom = Store.bomByFg(fgId);
       if (!bom) { UI.toast("No production BOM for " + fg.kodeFG + " - netting needs a BOM", "err"); return null; }
@@ -193,6 +205,7 @@ window.ViewsPpic = (function () {
   }
 
   /* ---------------- result ---------------- */
+  var supplierSel = {}; /* { materialCode: linkIndex } tracks user choice per PR line */
   function netCell(v) {
     return v > 0 ? "<span style='color:var(--red);font-weight:700'>" + Engine.fmtNum(v) + "</span>" : "-";
   }
@@ -243,9 +256,25 @@ window.ViewsPpic = (function () {
       { label: "Supply", render: function (l) { return UI.tag(l.supportedBy || "-"); } }
     ]));
 
+    /* Build supplier dropdown for PR lines (from material.supplierLinks) */
+    var matMap = Store.matMap();
+    supplierSel = {};
     body.appendChild(sectionTable("Purchase Request preview (Astoria shortfall, MOQ-rounded) - FR-PP-11", p.prLines, [
       { label: "Material", cls: "mono", key: "materialCode" },
       { label: "Name", key: "name" },
+      { label: "Supplier", render: function (l) {
+        var m = matMap[l.materialCode] || {};
+        var links = m.supplierLinks || [];
+        if (!links.length) return "<span class='row-muted'>-</span>";
+        var sel = UI.select(links.map(function (lk, i) {
+          var nm = ViewsMaster.supplierName(lk.supplierId) || lk.supplierId;
+          return [String(i), nm + " (MOQ " + Engine.fmtNum(lk.moq) + ", " + lk.leadDays + "d)"];
+        }), "0");
+        sel.style.width = "160px"; sel.style.fontSize = "11px";
+        sel.addEventListener("change", function () { supplierSel[l.materialCode] = Number(sel.value) || 0; });
+        supplierSel[l.materialCode] = 0;
+        return sel;
+      } },
       { label: "Net", cls: "num", render: function (l) { return Engine.fmtNum(l.net); } },
       { label: "MOQ", cls: "num", render: function (l) { return l.moq ? Engine.fmtNum(l.moq) : "-"; } },
       { label: "Order Qty", cls: "num", render: function (l) { return "<b>" + Engine.fmtNum(l.orderQty) + "</b>"; } },
@@ -288,6 +317,20 @@ window.ViewsPpic = (function () {
     var r = lastRun;
     if (!r) return;
     var commit = function () {
+      /* Apply user's supplier selection to PR lines before saving */
+      var mm = Store.matMap();
+      var prLines = r.plan.prLines.map(function (l) {
+        var m = mm[l.materialCode] || {};
+        var links = m.supplierLinks || [];
+        var idx = supplierSel[l.materialCode] != null ? supplierSel[l.materialCode] : 0;
+        var chosen = links[idx] || links[0] || {};
+        return Object.assign({}, l, {
+          supplierId: chosen.supplierId || "",
+          supplier: ViewsMaster.supplierName(chosen.supplierId) || "",
+          moq: Number(chosen.moq) || 0,
+          leadDays: Number(chosen.leadDays) || 0
+        });
+      });
       var res = Store.savePpicRun({
         soId: r.mode === "so" ? r.so.id : "",
         noSo: r.mode === "so" ? r.so.noSo : "",
@@ -296,7 +339,7 @@ window.ViewsPpic = (function () {
         bulkCode: r.bom.bulkCode || "",
         deliveryDate: r.input.deliveryDate,
         date: Engine.todayISO(),
-        prLines: r.plan.prLines,
+        prLines: prLines,
         calloffLines: r.plan.calloffLines,
         batches: r.plan.campaign.batches
       });

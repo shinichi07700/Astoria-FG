@@ -17,6 +17,7 @@ window.Store = (function () {
     db.suppliers = db.suppliers || [];
     db.formulas = db.formulas || [];
     db.packagings = db.packagings || [];
+    fixPackagingVolume();
     db.mixers = db.mixers || [];
     db.salesOrders = db.salesOrders || [];
     db.purchaseReqs = db.purchaseReqs || [];
@@ -39,6 +40,23 @@ window.Store = (function () {
     db.sims = db.sims || [];
     db.requests = db.requests || [];
     db.audit = db.audit || [];
+  }
+
+  /* Migration 012 retired the fill_min / fill_max pair (and the revisi +
+     shrink_tunnel_c parameters) in favour of one nominal volume plus a
+     tolerance band. Older working copies and restored JSON backups still
+     carry the pair, so derive the new fields here using the same rule as the
+     SQL backfill: volume = old fill min, widened just enough to still reach
+     the old fill_max. */
+  function fixPackagingVolume() {
+    db.packagings.forEach(function (p) {
+      if (p.volumeMl == null) {
+        var lo = Number(p.fillMin) || 0, hi = Number(p.fillMax) || 0;
+        p.volumeMl = lo;
+        p.fillTolPct = (lo > 0 && hi > lo) ? Math.round((hi - lo) / lo * 10000) / 100 : 0;
+      }
+      if (p.fillTolPct == null) p.fillTolPct = 0;
+    });
   }
 
   function load() {
@@ -251,7 +269,10 @@ window.Store = (function () {
     formula: { table: "m_formula", store: "formulas", key: "id", label: "Master Formula (FFS)",
       describe: function (f) { return f.id + " kategori " + (f.kategori || "-") + " BJ " + (f.bj || 1); } },
     packaging: { table: "m_packaging", store: "packagings", key: "id", label: "Master Packaging (FPS)",
-      describe: function (p) { return p.id + " rev " + (p.revisi || 0); } },
+      describe: function (p) {
+        return p.id + " " + Engine.fmtNum(p.volumeMl || 0) + " mL"
+          + (p.fillTolPct ? " \u00b1" + Engine.fmtNum(p.fillTolPct) + "%" : "");
+      } },
     mixer: { table: "m_mixer", store: "mixers", key: "id", label: "Mixer catalogue",
       describe: function (m) { return m.id + " " + (m.name || "") + " " + (m.capacityKg || 0) + " kg"; } }
   };
@@ -401,7 +422,7 @@ window.Store = (function () {
         id: uid("PR"), reqNo: reqNo, soId: soId, fgId: inp.fgId || "",
         materialCode: l.materialCode, materialName: l.name || m.name || "",
         qty: l.orderQty, netQty: l.net, unit: l.unit || m.unit || "", moq: l.moq || 0,
-        supplier: m.supplier || "", supplierId: m.supplierId || "", requiredBy: l.requiredBy || "", status: "Open"
+        supplier: l.supplier || m.supplier || "", supplierId: l.supplierId || m.supplierId || "", requiredBy: l.requiredBy || "", status: "Open"
       };
       db.purchaseReqs.unshift(rec);
       if (window.Sync) Sync.mark("t_purchase_req", rec.id);
@@ -590,17 +611,22 @@ window.Store = (function () {
       return (s.status === "Reserved" && String(s.lotId) === String(lotId)) ? a + (Number(s.qty) || 0) : a;
     }, 0);
   }
-  /* Released lots with free stock, oldest first (FIFO picking). */
+  /* Released lots with free stock, FEFO (earliest expiry first; nulls last;
+     tie-break by receivedAt for lots without an expiry date). */
   function releasedLots(code) {
     return db.inventoryLots.filter(function (l) {
       return l.materialCode === code && l.status === "Released" && (Number(l.qty) || 0) > 0;
     }).sort(function (a, b) {
-      var d = String(a.receivedAt || "").localeCompare(String(b.receivedAt || ""));
+      var ea = a.expiry || "9999-12-31", eb = b.expiry || "9999-12-31";
+      var d = ea.localeCompare(eb);
+      if (d !== 0) return d;
+      d = String(a.receivedAt || "").localeCompare(String(b.receivedAt || ""));
       return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
     });
   }
-  /* Greedy FIFO allocation of `qty` across Released lots (net of reservations). */
-  function fifoPick(code, qty) {
+  /* First-Expired-First-Out allocation of `qty` across Released lots
+     (cosmetic shelf-life priority, net of reservations). */
+  function fefoPick(code, qty) {
     var need = Number(qty) || 0, picks = [];
     if (need > 0) {
       releasedLots(code).forEach(function (l) {
@@ -725,7 +751,15 @@ window.Store = (function () {
     }
     if (param === "fill" || param === "weight") {
       var pk = bom.packagingId ? packagingById(bom.packagingId) : null; if (!pk) return null;
-      return { min: Number(pk.fillMin) || 0, max: Number(pk.fillMax) || 0, unit: "ml" };
+      /* nominal volume +/- the tolerance percentage set on the packaging
+         master; no volume recorded means no band is applied to the check */
+      var vol = Number(pk.volumeMl) || 0; if (!vol) return null;
+      var tol = Number(pk.fillTolPct) || 0;
+      return {
+        min: Engine.round4(vol * (1 - tol / 100)),
+        max: Engine.round4(vol * (1 + tol / 100)),
+        unit: "ml"
+      };
     }
     return null;
   }
@@ -990,7 +1024,7 @@ window.Store = (function () {
     }).filter(function (r) { return r.toIssue > 0; });
   }
   /* Create the FG receipt from an APPROVED pack work order: backflush the
-     component lots FIFO, open the FG lot and post the Kartu Stock RECEIPT. */
+     component lots FEFO, open the FG lot and post the Kartu Stock RECEIPT. */
   function createFgReceipt(inp) {
     inp = inp || {};
     var pack = packWoById(inp.woPackId); if (!pack) return { error: "Pack work order not found" };
@@ -1011,9 +1045,9 @@ window.Store = (function () {
       expiry: inp.expiry || "", producedAt: inp.producedAt || Engine.nowWIB(),
       receivedAt: date, receivedBy: db.meta.user.email || db.meta.user.name || "", backflush: [], note: inp.note || ""
     };
-    /* backflush component lots FIFO (net of staging already dispensed) */
+    /* backflush component lots FEFO (net of staging already dispensed) */
     backflushRequirement(pack.fgId, qty, pack.bulkWoId).forEach(function (r) {
-      var picked = fifoPick(r.materialCode, r.toIssue), picks = [];
+      var picked = fefoPick(r.materialCode, r.toIssue), picks = [];
       picked.picks.forEach(function (p) {
         var lot = lotById(p.lotId);
         if (lot) { lot.qty = Engine.round4(Math.max(0, (Number(lot.qty) || 0) - p.qty)); if (window.Sync) Sync.mark("t_inventory_lot", lot.id); }
@@ -1255,8 +1289,8 @@ window.Store = (function () {
   }
 
   function exportMasterCSV() {
-    var rows = [["Kode Produk Finish Good", "Deskripsi Produk", "Status F/G", "FFS Formula",
-      "FPS Kemas", "Kode NA", "Tgl Expire NA", "Diubah Oleh", "Waktu Update", "Discontinue / Revisi Flag"]];
+    var rows = [["F/G Product Code", "Product Description", "F/G Status", "FFS Formula",
+      "FPS Packaging", "NA Code", "NA Expiry Date", "Modified By", "Updated At", "Discontinue / Revision Flag"]];
     db.fgs.slice().sort(fgCompare).forEach(function (f) {
       rows.push([f.kodeFG, f.deskripsi, f.status, f.ffs, f.fps, f.kodeNA, f.tglExpire,
         f.diubahOleh, f.waktuUpdate, f.discontinue ? "TRUE" : "FALSE"]);
@@ -1284,7 +1318,7 @@ window.Store = (function () {
     allocatedOf: allocatedOf, availableOf: availableOf, ledgerFor: ledgerFor, postTxn: postTxn,
     poById: poById, createPoFromPr: createPoFromPr, savePurchaseOrder: savePurchaseOrder, receivePoLine: receivePoLine,
     lotById: lotById, saveLot: saveLot, setLotStatus: setLotStatus,
-    reservedOnLot: reservedOnLot, releasedLots: releasedLots, fifoPick: fifoPick,
+    reservedOnLot: reservedOnLot, releasedLots: releasedLots, fefoPick: fefoPick,
     stagingById: stagingById, createStaging: createStaging, dispenseStaging: dispenseStaging, cancelStaging: cancelStaging,
     lcById: lcById, clearancesFor: clearancesFor, clearancePassed: clearancePassed,
     createLineClearance: createLineClearance, saveLineClearance: saveLineClearance, setClearanceStatus: setClearanceStatus,

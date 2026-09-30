@@ -44,9 +44,11 @@ window.UI = (function () {
     rows.forEach(function (r) {
       var tr = el("tr", opts.onRowClick ? { class: "clickable", onclick: function () { opts.onRowClick(r); } } : null);
       cols.forEach(function (c) {
+        var raw = !c.render;
         var v = c.render ? c.render(r) : r[c.key];
         var td = el("td", { class: c.cls || "" });
         if (v instanceof Node) td.appendChild(v);
+        else if (raw) td.textContent = v === undefined || v === null ? "" : String(v);
         else td.innerHTML = v === undefined || v === null ? "" : String(v);
         tr.appendChild(td);
       });

@@ -50,6 +50,45 @@ window.Sync = (function () {
      (a table only 007 creates) is the proxy for "007 applied". */
   function has007() { return !missing["m_supplier"]; }
 
+  /* Migration 010 adds materials.supplier_links (jsonb), 011 adds
+     m_formula.lines / m_packaging.lines (jsonb), and 012 replaces the
+     m_packaging fill_min/fill_max pair (plus the revisi and shrink_tunnel_c
+     parameters) with volume_ml / fill_tol_pct. All three are settled by
+     detectColumnFlags() below: inferring a column from a hydrated row cannot
+     work while the table is empty, and m_packaging ships with zero rows. */
+  var has010 = false;
+  var has011 = false;
+  var has012 = false;
+
+  /* Migration 009 adds m_supplier.category. Until it runs the column is
+     absent, so the first upsert carrying it fails; the flag then drops the
+     column from supplier rows (retried after a reload).
+     A fresh schema cache can also report it as a missing table. */
+  var supHasCategoryCol = true;
+  /* This project's PostgREST answers an unknown column with the raw PostgreSQL
+     error 42703 - {"code":"42703","message":"column ... does not exist"} -
+     so matching PGRST204 alone never fired and the retries below stayed dead. */
+  function isMissingColumn(err) {
+    return !!err && (err.code === "PGRST204" || err.code === "42703" ||
+      /could not find the column/i.test(err.message || ""));
+  }
+  /* Ask the schema cache which optional columns exist. 010/011 only ADD a
+     column, so a failed probe must never switch the flag off - that would
+     silently drop the field from every upsert. 012 REPLACES columns, so a
+     stale true sends fill_min/fill_max and the write fails outright; there
+     the probe is authoritative in both directions. A probe that errors for
+     any other reason (offline, bad token) leaves the flag as it was. */
+  function detectColumnFlags() {
+    function probe(table, column, apply) {
+      return SB.hasColumn(table, column).then(apply).catch(function () {});
+    }
+    return Promise.all([
+      probe("materials", "supplier_links", function (ok) { if (ok) has010 = true; }),
+      probe("m_formula", "lines", function (ok) { if (ok) has011 = true; }),
+      probe("m_packaging", "volume_ml", function (ok) { has012 = ok; })
+    ]);
+  }
+
   /* ---------- dirty tracking ---------- */
   function loadPending() {
     try {
@@ -95,14 +134,21 @@ window.Sync = (function () {
     };
     if (has002()) { row.moq = Number(m.moq) || 0; row.lead_days = Number(m.leadDays) || 0; }
     if (has007()) { row.supplier_id = m.supplierId || null; }
+    if (has010) { row.supplier_links = m.supplierLinks || []; }
     return row;
   }
   function matFrom(r) {
+    /* Detect migration 010 availability on first call during hydrate. */
+    if (r.supplier_links !== undefined) has010 = true;
+    var links = r.supplier_links || (r.supplier_id ? [{ supplierId: r.supplier_id, moq: Number(r.moq) || 0, leadDays: Number(r.lead_days) || 0 }] : []);
+    var primary = links[0] || {};
     return {
       code: r.code, name: r.name, category: r.category, unit: r.unit,
       stockQty: Number(r.stock_qty) || 0, stocked: !!r.stocked, supplier: r.supplier,
-      supplierId: r.supplier_id || "",
-      moq: Number(r.moq) || 0, leadDays: Number(r.lead_days) || 0
+      supplierId: primary.supplierId || r.supplier_id || "",
+      moq: Number(primary.moq) || Number(r.moq) || 0,
+      leadDays: Number(primary.leadDays) || Number(r.lead_days) || 0,
+      supplierLinks: links
     };
   }
   function custRow(c) {
@@ -117,18 +163,21 @@ window.Sync = (function () {
     };
   }
   function supRow(s) {
-    return {
+    var row = {
       id: s.id, name: s.name || "", address: s.address || "", pic: s.pic || "",
       contact: s.contact || "", terms: s.terms || ""
     };
+    if (supHasCategoryCol) row.category = s.category || "";
+    return row;
   }
   function supFrom(r) {
     return {
-      id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms
+      id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms,
+      category: r.category || ""
     };
   }
   function formulaRow(f) {
-    return {
+    var row = {
       id: f.id, kategori: f.kategori || "", customer_id: f.customerId || null,
       urutan: Number(f.urutan) || 0, bj: Number(f.bj) || 1,
       ph_min: f.phMin == null ? null : Number(f.phMin), ph_max: f.phMax == null ? null : Number(f.phMax),
@@ -136,29 +185,74 @@ window.Sync = (function () {
       stab_tk: f.stabTk || "-", stab_tkul: f.stabTkul || "-", stab_t50: f.stabT50 || "-", stab_tm: f.stabTm || "-",
       note: f.note || ""
     };
+    if (has011) { row.lines = f.lines || []; }
+    return row;
   }
   function formulaFrom(r) {
+    if (r.lines !== undefined) has011 = true;
     return {
       id: r.id, kategori: r.kategori, customerId: r.customer_id || "", urutan: Number(r.urutan) || 0,
       bj: Number(r.bj) || 1, phMin: r.ph_min == null ? "" : Number(r.ph_min), phMax: r.ph_max == null ? "" : Number(r.ph_max),
       viscosity: r.viscosity, stabTk: r.stab_tk, stabTkul: r.stab_tkul, stabT50: r.stab_t50, stabTm: r.stab_tm,
-      note: r.note
+      note: r.note, lines: r.lines || []
     };
   }
   function packRow(p) {
-    return {
+    var row = {
       id: p.id, customer_id: p.customerId || null,
-      urutan_varian: Number(p.urutanVarian) || 0, revisi: Number(p.revisi) || 0,
-      fill_min: Number(p.fillMin) || 0, fill_max: Number(p.fillMax) || 0,
-      shrink_tunnel_c: Number(p.shrinkTunnelC) || 0, inkjet_syntax: p.inkjetSyntax || "", note: p.note || ""
+      urutan_varian: Number(p.urutanVarian) || 0,
+      inkjet_syntax: p.inkjetSyntax || "", note: p.note || ""
     };
+    if (has012) {
+      row.volume_ml = Number(p.volumeMl) || 0;
+      row.fill_tol_pct = Number(p.fillTolPct) || 0;
+    } else {
+      /* pre-012 cloud: the nominal volume fills the old min/max pair, so the
+         check (fill_max >= fill_min) still holds */
+      row.revisi = 0;
+      row.fill_min = Number(p.volumeMl) || 0;
+      row.fill_max = Number(p.volumeMl) || 0;
+      row.shrink_tunnel_c = 0;
+    }
+    if (has011) { row.lines = p.lines || []; }
+    return row;
   }
   function packFrom(r) {
+    if (r.lines !== undefined) has011 = true;
+    if (r.volume_ml !== undefined) has012 = true;
     return {
       id: r.id, customerId: r.customer_id || "", urutanVarian: Number(r.urutan_varian) || 0,
-      revisi: Number(r.revisi) || 0, fillMin: Number(r.fill_min) || 0, fillMax: Number(r.fill_max) || 0,
-      shrinkTunnelC: Number(r.shrink_tunnel_c) || 0, inkjetSyntax: r.inkjet_syntax, note: r.note
+      volumeMl: has012 ? Number(r.volume_ml) || 0 : Number(r.fill_min) || 0,
+      fillTolPct: has012 ? Number(r.fill_tol_pct) || 0 : 0,
+      inkjetSyntax: r.inkjet_syntax, note: r.note,
+      lines: r.lines || []
     };
+  }
+
+  /* ---------- per-table upserts that tolerate a column-set drift ----------
+     Both live at module scope because flush() and pushEverything() need them;
+     an unknown column is rejected (42703 / PGRST204), so each retries once
+     with the other shape. They take LOCAL records - the XxxRow mapper does the
+     translation on both attempts. */
+  function supUpsert(recs) {
+    return SB.upsert("m_supplier", recs.map(supRow)).catch(function (err) {
+      if (supHasCategoryCol && isMissingColumn(err)) { supHasCategoryCol = false; return SB.upsert("m_supplier", recs.map(supRow)); }
+      throw err;
+    });
+  }
+  function packUpsert(recs) {
+    return SB.upsert("m_packaging", recs.map(packRow)).catch(function (err) {
+      /* flip the 012 shape and retry once - covers a cloud that has the
+         migration applied and one that does not */
+      if (isMissingColumn(err)) { has012 = !has012; return SB.upsert("m_packaging", recs.map(packRow)); }
+      throw err;
+    });
+  }
+  /* dispatch so flush() and pushEverything() stay in step */
+  function upsertTable(t, recs) {
+    if (t.name === "m_supplier") return supUpsert(recs);
+    if (t.name === "m_packaging") return packUpsert(recs);
+    return SB.upsert(t.name, recs.map(t.row));
   }
   function mixerRow(m) {
     return {
@@ -593,7 +687,10 @@ window.Sync = (function () {
     missing = {};
     var kids = childTables();
     var specs = TABLES.concat(kids).concat(EXTRAS);
-    return Promise.all(specs.map(fetchTable)).then(function (res) {
+    /* Settle the column shape before any row is mapped or pushed. */
+    return detectColumnFlags().then(function () {
+      return Promise.all(specs.map(fetchTable));
+    }).then(function (res) {
       var rows = {};
       specs.forEach(function (s, i) { rows[s.name] = res[i] || []; });
 
@@ -712,7 +809,6 @@ window.Sync = (function () {
     function recsOf(t, ids) {
       return db[t.store].filter(function (r) { return ids.indexOf(r[t.key]) >= 0; });
     }
-
     if (doReplace) {
       /* PostgREST refuses DELETE without a WHERE clause, and wiping an
          already-empty cloud (first-sign-in migration) is pointless. */
@@ -740,7 +836,7 @@ window.Sync = (function () {
       available.forEach(function (t) {
         var ids = group(t.name, "upsert");
         if (!ids.length) return;
-        chain = chain.then(function () { return SB.upsert(t.name, recsOf(t, ids).map(t.row)); });
+        chain = chain.then(function () { return upsertTable(t, recsOf(t, ids)); });
         (t.children || []).forEach(function (c) {
           chain = chain
             .then(function () { return SB.remove(c.name, c.fk + "=" + inList(ids)); })
@@ -787,7 +883,7 @@ window.Sync = (function () {
   function pushEverything(db, available) {
     var chain = Promise.resolve();
     available.forEach(function (t) {
-      chain = chain.then(function () { return SB.upsert(t.name, db[t.store].map(t.row)); });
+      chain = chain.then(function () { return upsertTable(t, db[t.store]); });
       (t.children || []).forEach(function (c) {
         chain = chain.then(function () {
           var flat = [];

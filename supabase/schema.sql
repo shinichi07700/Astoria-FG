@@ -68,7 +68,7 @@ create trigger fg_master_touch before update on public.fg_master
 create table if not exists public.materials (
   code      text primary key,
   name      text not null default '',
-  category  text not null default '',     -- RM | PM | AX
+  category  text not null default '',     -- RM-INT | RM-EXT | PKG-INT | PKG-EXT | PREMIX | AUX-QA (legacy RM|PM|AX still tolerated)
   unit      text not null default '',
   stock_qty numeric not null default 0,
   stocked   boolean not null default true,

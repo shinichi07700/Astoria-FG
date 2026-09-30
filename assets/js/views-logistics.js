@@ -2,7 +2,7 @@
    VIEWS - FG warehouse & outbound logistics (Phase 5)
    Three surfaces over the finished-goods ledger:
      1. FG receipts (FR-PR-02) - created from an APPROVED pack work
-        order; backflushes the component lots FIFO, opens the FG lot
+        order; backflushes the component lots FEFO, opens the FG lot
         and posts a RECEIPT to the Kartu Stock Barang Jadi.
      2. Kartu Stock Barang Jadi - the append-only FG ledger per kode
         with a running balance; SOH is derived (no opening balance).
@@ -118,7 +118,7 @@ window.ViewsLogistics = (function () {
       var qty = Number(iQty.value) || Number(p.actualYield) || 0;
       var req = Store.backflushRequirement(p.fgId, qty, p.bulkWoId);
       preview.textContent = req.length
-        ? "Backflush will issue " + req.length + " component line(s) FIFO (net of staging already dispensed)."
+        ? "Backflush will issue " + req.length + " component line(s) FEFO (net of staging already dispensed)."
         : "No BOM / component requirement to backflush for this FG.";
     }
     iWo.addEventListener("change", updatePreview);
@@ -171,7 +171,7 @@ window.ViewsLogistics = (function () {
           UI.el("dt", { text: "Release (FR-QC-06)" }), UI.el("dd", { class: "mono", text: rel ? (rel.releaseNo + " - " + rel.disposition) : "-" }),
           UI.el("dt", { text: "Note" }), UI.el("dd", { text: r.note || "-" })
         ]),
-        UI.el("div", { style: "font-weight:700;font-size:12.5px;margin-bottom:4px", text: "Backflush (component consumption, FIFO)" }),
+        UI.el("div", { style: "font-weight:700;font-size:12.5px;margin-bottom:4px", text: "Backflush (component consumption, FEFO)" }),
         UI.table([
           { label: "Material", cls: "mono", key: "materialCode" },
           { label: "Name", key: "materialName" },
@@ -420,7 +420,7 @@ window.ViewsLogistics = (function () {
       (rows || "<tr><td colspan='9' class='c'>No component backflushed.</td></tr>") + "</table>";
     UI.printHTML(UI.docShell("FINISHED GOODS RECEIPT (FR-PR-02)", info, h,
       ["Diterima oleh (Warehouse)", "Diperiksa oleh (QA)", "Disetujui oleh (PPIC)"],
-      "Received into the Kartu Stock Barang Jadi; component lots backflushed FIFO net of staging already dispensed."));
+      "Received into the Kartu Stock Barang Jadi; component lots backflushed FEFO net of staging already dispensed."));
   }
 
   /* ---------------- print: Surat Jalan (delivery order) ---------------- */

@@ -66,21 +66,22 @@ window.ViewsBom = (function () {
       [UI.btn("< Back to list", closeEditor, "")]));
 
     /* ----- header form ----- */
-    /* Finish Good picker lists Aktif SKUs only; when editing a BOM whose
+    /* Finish Good picker lists Aktif SKUs only, labelled with the product
+       description (deskripsi produk) only; when editing a BOM whose
        product is no longer Aktif we keep that one option (tagged with its
        status) so the existing link is never silently dropped. */
     function fgLabel(f) {
-      return f.kodeFG + "  -  " + f.deskripsi + (f.status === "Aktif" ? "" : "  [" + f.status + "]");
+      return (f.deskripsi || f.kodeFG || f.id) + (f.status === "Aktif" ? "" : "  [" + f.status + "]");
     }
     var fgPool = db.fgs.filter(function (f) { return f.status === "Aktif"; });
-    /* picker order: Deskripsi Produk A-Z (tie-break kode) */
+    /* picker order: Product Description A-Z (tie-break code) */
     fgPool.sort(Store.fgDescCompare);
     if (!isNew && d.fgId) {
       var curFg = Store.fgById(d.fgId);
       if (curFg && curFg.status !== "Aktif") fgPool = [curFg].concat(fgPool);
     }
     var fgOpts = [["", "(select Finish Good)"]].concat(fgPool.map(function (f) { return [f.id, fgLabel(f)]; }));
-    var iFg = UI.combo(fgOpts, d.fgId, "Type kode or description to search...");
+    var iFg = UI.combo(fgOpts, d.fgId, "Type to search Finish Good...");
     /* Customer: pick from the customer master once it has entries; fall back
        to free text so existing BOMs stay editable before any customer is
        registered. The combo value is the customer NAME (the boms.customer
@@ -100,7 +101,9 @@ window.ViewsBom = (function () {
     var iNoCustomer = UI.input({ value: d.noCustomer });
     var iRev = UI.input({ type: "number", step: "1", min: "0", value: String(d.revision) });
     var iDate = UI.input({ type: "date", value: d.mulaiBerlaku || Engine.todayISO() });
-    var iBulk = UI.input({ class: "input mono", value: d.bulkCode, placeholder: "Bulk / semi-finished item code" });
+    /* F/G Code is read-only: it mirrors the selected Finish Good's code and is
+       persisted into bulk_code (the finance / Accurate item code). */
+    var iBulk = UI.input({ class: "input mono", value: (Store.fgById(d.fgId) || {}).kodeFG || "", placeholder: "Auto from Finish Good", disabled: true, style: "background:#f4f5f7;color:var(--muted);cursor:not-allowed" });
     var iBatchSize = UI.input({ value: d.batchSize, placeholder: "e.g. 100 L" });
     var iYield = UI.input({ type: "number", step: "1", min: "1", value: String(d.batchYield || 1000) });
     var iStatus = UI.select([["Draft", "Draft"], ["Approved", "Approved"]], d.status);
@@ -128,8 +131,8 @@ window.ViewsBom = (function () {
         : (iFormula.value ? "Not in master (dangling link)." : "");
       var p = iPackaging.value ? Store.packagingById(iPackaging.value) : null;
       packagingRef.textContent = p
-        ? "Fill " + Engine.fmtNum(p.fillMin) + (p.fillMax && p.fillMax !== p.fillMin ? "-" + Engine.fmtNum(p.fillMax) : "") + " mL" +
-          (p.shrinkTunnelC ? "  \u00b7  shrink " + Engine.fmtNum(p.shrinkTunnelC) + "\u00b0C" : "") +
+        ? "Volume " + Engine.fmtNum(p.volumeMl || 0) + " mL" +
+          (p.fillTolPct ? " \u00b1" + Engine.fmtNum(p.fillTolPct) + "%" : "") +
           (p.inkjetSyntax ? "  \u00b7  inkjet " + p.inkjetSyntax : "")
         : (iPackaging.value ? "Not in master (dangling link)." : "");
     }
@@ -141,6 +144,9 @@ window.ViewsBom = (function () {
     function syncHeader() {
       d.fgId = iFg.value; d.customer = iCustomer.value.trim(); d.noCustomer = iNoCustomer.value.trim();
       d.revision = Number(iRev.value) || 0; d.mulaiBerlaku = iDate.value;
+      /* read-only F/G Code follows the selected Finish Good */
+      var fgSel = Store.fgById(iFg.value);
+      iBulk.value = fgSel ? (fgSel.kodeFG || "") : "";
       d.bulkCode = iBulk.value.trim(); d.batchSize = iBatchSize.value.trim();
       d.batchYield = Number(iYield.value) || 1; d.status = iStatus.value;
       d.formulaId = iFormula.value || ""; d.packagingId = iPackaging.value || "";
@@ -151,7 +157,64 @@ window.ViewsBom = (function () {
       if (isNew) pvNo.textContent = previewNo();
       renderLines("FORMULA"); renderLines("KEMAS");
     }
-    [iFg, iCustomer, iNoCustomer, iRev, iDate, iBulk, iBatchSize, iYield, iStatus, iFormula, iPackaging].forEach(function (n) {
+    /* ---- Inherit composition from linked FFS/FPS masters ----
+       When formula/packaging master is linked, sync replaces the BOM items
+       with lines derived from the master's own `lines` array (source of truth). */
+    var lastFormulaId = d.formulaId || "";
+    var lastPackagingId = d.packagingId || "";
+    function syncFromMasters() {
+      var newFormulaId = iFormula.value || "";
+      var newPackagingId = iPackaging.value || "";
+      var yield_ = Number(iYield.value) || 1;
+      var mm = Store.matMap();
+      /* parse batch size numeric (e.g. "100 L" → 100, "50" → 50) */
+      var batchNum = parseFloat(iBatchSize.value) || 0;
+      /* Formula section: inherit from FFS master */
+      if (newFormulaId && newFormulaId !== lastFormulaId) {
+        var fMaster = Store.formulaById(newFormulaId);
+        if (fMaster && fMaster.lines && fMaster.lines.length) {
+          /* remove existing FORMULA items, add inherited ones */
+          d.items = d.items.filter(function (it) { return it.section !== "FORMULA"; });
+          fMaster.lines.forEach(function (ln) {
+            var mat = mm[ln.materialCode] || {};
+            var pct = Number(ln.pct) || 0;
+            var qtyPerBatch = batchNum > 0 ? Engine.round4(batchNum * pct / 100) : 0;
+            d.items.push({
+              section: "FORMULA", materialCode: ln.materialCode,
+              pct: pct, qtyPerBatch: qtyPerBatch,
+              qtyPerUnit: yield_ > 0 ? Engine.round4(qtyPerBatch / yield_) : 0,
+              unit: mat.unit || "gr", supportedBy: "Astoria", lossPct: 0, note: ln.note || ""
+            });
+          });
+          UI.toast("Formula lines synced from FFS " + newFormulaId + " (" + fMaster.lines.length + " materials)", "ok");
+        }
+        lastFormulaId = newFormulaId;
+      }
+      /* Kemas section: inherit from FPS master */
+      if (newPackagingId && newPackagingId !== lastPackagingId) {
+        var pMaster = Store.packagingById(newPackagingId);
+        if (pMaster && pMaster.lines && pMaster.lines.length) {
+          d.items = d.items.filter(function (it) { return it.section !== "KEMAS"; });
+          pMaster.lines.forEach(function (ln) {
+            var mat = mm[ln.materialCode] || {};
+            var qty = Number(ln.qty) || 1;
+            d.items.push({
+              section: "KEMAS", materialCode: ln.materialCode,
+              pct: 0, qtyPerUnit: qty,
+              qtyPerBatch: Engine.round4(qty * yield_),
+              unit: mat.unit || "pcs", supportedBy: ln.supportedBy || "Astoria", lossPct: 0, note: ln.note || ""
+            });
+          });
+          UI.toast("Packaging lines synced from FPS " + newPackagingId + " (" + pMaster.lines.length + " items)", "ok");
+        }
+        lastPackagingId = newPackagingId;
+      }
+      renderLines("FORMULA"); renderLines("KEMAS");
+    }
+    /* wire master sync on formula/packaging change (after header sync) */
+    iFormula.addEventListener("change", function () { syncHeader(); syncFromMasters(); });
+    iPackaging.addEventListener("change", function () { syncHeader(); syncFromMasters(); });
+    [iFg, iCustomer, iNoCustomer, iRev, iDate, iBulk, iBatchSize, iYield, iStatus].forEach(function (n) {
       n.addEventListener("input", syncHeader);
       n.addEventListener("change", syncHeader);
     });
@@ -162,16 +225,19 @@ window.ViewsBom = (function () {
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "Status" }), UI.el("span", { class: "pill " + (d.status === "Approved" ? "aktif" : "draft"), text: d.status })])
       ]),
       UI.el("div", { class: "form-grid" }, [
-        UI.field("Finish Good (Nama & No FG)", iFg),
-        UI.field("Bulk / semi-finished code", iBulk, "Formula output code, e.g. TO01MR03TWB - used by finance in Accurate."),
+        UI.field("Product Description (F/G)", iFg),
+        UI.field("F/G Code", iBulk, "Auto-filled from the selected Product Description (read-only)."),
         UI.field("Customer", iCustomer),
         UI.field("No Customer", iNoCustomer),
-        UI.field("Revisi", iRev),
-        UI.field("Mulai berlaku / Tgl BOM", iDate),
-        UI.field("Batch size", iBatchSize),
+        UI.field("Revision", iRev),
+        UI.field("Effective Date / BOM Date", iDate),
+        UI.field("Batch Size", iBatchSize),
         UI.field("Batch yield (pcs per batch)", iYield, "Formula qty per batch is divided by this to get qty per unit."),
-        UI.field("Formula master (FFS)", UI.el("div", {}, [iFormula, formulaRef]), "Links BJ / pH / stability used by netting and QC."),
-        UI.field("Packaging master (FPS)", UI.el("div", {}, [iPackaging, packagingRef]), "Links fill volume / shrink / inkjet for the pack line."),
+        UI.field("Formula master (FFS)", UI.el("div", {}, [iFormula, formulaRef]), "Composition inherited from FFS master lines."),
+        UI.field("Packaging master (FPS)", UI.el("div", {}, [iPackaging, packagingRef]), "Composition inherited from FPS master lines."),
+        UI.field("", UI.el("div", { class: "btn-row" }, [
+          UI.btn("\u21b3 Sync from Master", function () { syncFromMasters(); }, "btn-sm")
+        ]), "Replaces formula/kemas items with the linked master's composition lines."),
         UI.field("Status", iStatus)
       ])
     ])));
@@ -220,10 +286,15 @@ window.ViewsBom = (function () {
       if (cust) UI.toast(cust + " customer-supplied kemas component(s): never Astoria stock (SOH 0) - shortfalls become call-offs.", "ok");
     }
 
+    /* BOM material pools by category. Formula/bulk = raw materials + premix;
+       Kemas/packaging = packaging only. QA/QC auxiliary items are not product
+       components, so they appear in neither pool. Legacy RM/PM codes are still
+       honoured so pre-migration rows keep working. */
+    var FORMULA_CATS = ["RM-INT", "RM-EXT", "PREMIX", "RM"];
+    var KEMAS_CATS = ["PKG-INT", "PKG-EXT", "PM"];
     function matsFor(section) {
-      return db.materials.filter(function (m) {
-        return section === "FORMULA" ? m.category === "RM" : (m.category === "PM" || m.category === "AX");
-      });
+      var pool = section === "FORMULA" ? FORMULA_CATS : KEMAS_CATS;
+      return db.materials.filter(function (m) { return pool.indexOf(m.category) >= 0; });
     }
 
     function renderLines(section) {
@@ -278,7 +349,7 @@ window.ViewsBom = (function () {
       var iPct = isF ? UI.input({ type: "number", step: "0.0001", min: "0", value: String(it.pct || 0), style: "width:80px" }) : null;
       var iQty = UI.input({ type: "number", step: "0.00001", value: String(isF ? it.qtyPerBatch : it.qtyPerUnit) });
       var autoCell = UI.el("span", { class: "mono", style: "font-size:11.5px;color:var(--muted)" });
-      var iUnit = UI.input({ value: it.unit, style: "width:64px" });
+      var iUnit = UI.input({ value: it.unit, style: "width:64px;background:#f4f5f7;color:var(--muted);cursor:not-allowed", disabled: true });
       var iLoss = UI.input({ type: "number", step: "0.1", min: "0", value: String(it.lossPct || 0), style: "width:70px" });
       var iSup = UI.select([["Astoria", "Astoria"], ["Customer", "Customer"]], it.supportedBy);
       var iNote = UI.input({ value: it.note || "", placeholder: "optional" });
@@ -299,7 +370,7 @@ window.ViewsBom = (function () {
         if (m) { iUnit.value = m.unit; }
         sync();
       });
-      [iQty, iUnit, iLoss, iNote].forEach(function (n) { n.addEventListener("input", sync); });
+      [iQty, iLoss, iNote].forEach(function (n) { n.addEventListener("input", sync); });
       if (iPct) iPct.addEventListener("input", sync);
       iSup.addEventListener("change", sync);
       sync();
@@ -400,10 +471,10 @@ window.ViewsBom = (function () {
   function printBOM(b) {
     var fg = Store.fgById(b.fgId);
     var info = [
-      ["No BOM", b.noBom], ["Tgl", b.mulaiBerlaku],
+      ["No BOM", b.noBom], ["Date", b.mulaiBerlaku],
       ["Customer", b.customer || "-"], ["No Customer", b.noCustomer || "-"],
-      ["Nama FG", fg ? fg.deskripsi : "-"], ["No FG", fg ? fg.kodeFG : "-"],
-      ["Revisi", String(b.revision)], ["Status", b.status]
+      ["Product Description", fg ? fg.deskripsi : "-"], ["F/G Code", fg ? fg.kodeFG : "-"],
+      ["Revision", String(b.revision)], ["Status", b.status]
     ];
     var note = "Complete material list: section A covers all raw materials consumed to produce the bulk (formula), " +
       "section B covers all packaging (kemas) components including auxiliary. Qty/Unit already includes stated loss. " +

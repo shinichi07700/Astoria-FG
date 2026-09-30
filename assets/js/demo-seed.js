@@ -31,28 +31,32 @@ window.DemoSeed = (function () {
   var REJECTS   = 190;
   var BATCH_LOT = "BATCH-DEMO-001";
 
+  /* category = what the vendor supplies (Master Supplier categories, see
+     views-master SUP_CAT_LABEL): Chemindo = internal raw materials, BASF =
+     imported (external) raw materials, Kemasindo = internal packaging. */
   var SUPPLIERS = [
-    { id: "SUP-DEMO-CHEM",  name: "PT Chemindo Nusantara",        pic: "Andi",   contact: "021-555-0101 / andi@chemindo.co.id",  terms: "Net 30", address: "Kawasan Industri MM2100, Cikarang Barat, Bekasi" },
-    { id: "SUP-DEMO-BASF",  name: "BASF South East Asia Pte Ltd", pic: "Wijaya", contact: "021-555-0202 / wijaya@basf-sea.com",   terms: "Net 45", address: "Menara BCA, Jl. MH Thamrin No.1, Jakarta Pusat" },
-    { id: "SUP-DEMO-KEMAS", name: "PT Kemasindo Prima",           pic: "Sari",   contact: "021-555-0303 / sari@kemasindo.co.id", terms: "Net 30", address: "Jl. Raya Serpong KM 7, Tangerang Selatan" }
+    { id: "SUP-DEMO-CHEM",  category: "RM-INT", name: "PT Chemindo Nusantara",        pic: "Andi",   contact: "021-555-0101 / andi@chemindo.co.id",  terms: "Net 30", address: "Kawasan Industri MM2100, Cikarang Barat, Bekasi" },
+    { id: "SUP-DEMO-BASF",  category: "RM-EXT", name: "BASF South East Asia Pte Ltd", pic: "Wijaya", contact: "021-555-0202 / wijaya@basf-sea.com",   terms: "Net 45", address: "Menara BCA, Jl. MH Thamrin No.1, Jakarta Pusat" },
+    { id: "SUP-DEMO-KEMAS", category: "PKG-INT", name: "PT Kemasindo Prima",           pic: "Sari",   contact: "021-555-0303 / sari@kemasindo.co.id", terms: "Net 30", address: "Jl. Raya Serpong KM 7, Tangerang Selatan" }
   ];
 
-  /* Raw materials + Astoria-related packaging -> supplier, MOQ and lead
-     time. Customer-supplied components (302000xx) are deliberately left
-     unlinked: they arrive on a call-off, not a purchase order. */
+  /* Raw materials + Astoria-related packaging -> supplier links with MOQ and
+     lead time. Customer-supplied components (302000xx) are deliberately left
+     unlinked: they arrive on a call-off, not a purchase order.
+     Some materials have multiple suppliers (primary = first entry). */
   var MAT_ENRICH = {
-    "RM-1001":  { sup: "SUP-DEMO-CHEM",  moq: 25,   lead: 7 },
-    "RM-1002":  { sup: "SUP-DEMO-CHEM",  moq: 25,   lead: 7 },
-    "RM-1003":  { sup: "SUP-DEMO-BASF",  moq: 5,    lead: 30 },
-    "RM-1004":  { sup: "SUP-DEMO-CHEM",  moq: 25,   lead: 7 },
-    "RM-1005":  { sup: "SUP-DEMO-BASF",  moq: 5,    lead: 30 },
-    "RM-1006":  { sup: "SUP-DEMO-BASF",  moq: 1,    lead: 30 },
-    "RM-1007":  { sup: "SUP-DEMO-BASF",  moq: 1,    lead: 30 },
-    "RM-1008":  { sup: "SUP-DEMO-CHEM",  moq: 5,    lead: 7 },
-    "RM-1009":  { sup: "SUP-DEMO-BASF",  moq: 5,    lead: 30 },
-    "20200001": { sup: "SUP-DEMO-KEMAS", moq: 1000, lead: 14 },
-    "20010004": { sup: "SUP-DEMO-KEMAS", moq: 100,  lead: 10 },
-    "20010002": { sup: "SUP-DEMO-KEMAS", moq: 10,   lead: 10 }
+    "RM-1001":  { links: [{ sup: "SUP-DEMO-CHEM", moq: 25, lead: 7 }] },
+    "RM-1002":  { links: [{ sup: "SUP-DEMO-CHEM", moq: 25, lead: 7 }] },
+    "RM-1003":  { links: [{ sup: "SUP-DEMO-BASF", moq: 5, lead: 30 }, { sup: "SUP-DEMO-CHEM", moq: 25, lead: 7 }] },
+    "RM-1004":  { links: [{ sup: "SUP-DEMO-CHEM", moq: 25, lead: 7 }] },
+    "RM-1005":  { links: [{ sup: "SUP-DEMO-BASF", moq: 5, lead: 30 }, { sup: "SUP-DEMO-CHEM", moq: 10, lead: 14 }] },
+    "RM-1006":  { links: [{ sup: "SUP-DEMO-BASF", moq: 1, lead: 30 }] },
+    "RM-1007":  { links: [{ sup: "SUP-DEMO-BASF", moq: 1, lead: 30 }] },
+    "RM-1008":  { links: [{ sup: "SUP-DEMO-CHEM", moq: 5, lead: 7 }] },
+    "RM-1009":  { links: [{ sup: "SUP-DEMO-BASF", moq: 5, lead: 30 }] },
+    "20200001": { links: [{ sup: "SUP-DEMO-KEMAS", moq: 1000, lead: 14 }] },
+    "20010004": { links: [{ sup: "SUP-DEMO-KEMAS", moq: 100, lead: 10 }] },
+    "20010002": { links: [{ sup: "SUP-DEMO-KEMAS", moq: 10, lead: 10 }] }
   };
 
   /* Faithful copy of the PPIC view's BOM -> Netting.plan mapper, so the demo
@@ -79,7 +83,7 @@ window.DemoSeed = (function () {
       var pct = useStored ? (Number(it.pct) || 0)
         : (batchSum > 0 ? (Number(it.qtyPerBatch) || 0) / batchSum * 100 : 0);
       return {
-        materialCode: it.materialCode, name: info.name, unit: info.unit || "kg",
+        materialCode: it.materialCode, name: info.name, unit: info.unit || "gr",
         pct: pct, lossPct: Number(it.lossPct) || 0, supportedBy: it.supportedBy || "Astoria",
         soh: info.soh, allocated: info.allocated, moq: info.moq, leadDays: info.leadDays
       };
@@ -128,12 +132,17 @@ window.DemoSeed = (function () {
     Object.keys(MAT_ENRICH).forEach(function (code) {
       var m = mm[code]; if (!m) return;
       var e = MAT_ENRICH[code];
-      var sup = Store.supplierById(e.sup);
+      var links = (e.links || []).map(function (lk) {
+        return { supplierId: lk.sup, moq: lk.moq || 0, leadDays: lk.lead || 0 };
+      });
+      var primary = links[0] || {};
+      var sup = Store.supplierById(primary.supplierId);
       var rec = Object.assign({}, m);
-      rec.supplierId = e.sup;
+      rec.supplierLinks = links;
+      rec.supplierId = primary.supplierId || "";
       rec.supplier = sup ? sup.name : (m.supplier || "");
-      rec.moq = Number(m.moq) || e.moq || 0;
-      rec.leadDays = Number(m.leadDays) || e.lead || 0;
+      rec.moq = primary.moq || 0;
+      rec.leadDays = primary.leadDays || 0;
       Store.saveMaterial(rec, false, code);
       linked++;
     });
@@ -208,7 +217,7 @@ window.DemoSeed = (function () {
       plan.formula.forEach(function (l) {
         var req = Engine.round4(plannedKg * (Number(l.pct) || 0) / 100);
         if (req <= 0) return;
-        Store.fifoPick(l.materialCode, req).picks.forEach(function (p) { picks.push(p); });
+        Store.fefoPick(l.materialCode, req).picks.forEach(function (p) { picks.push(p); });
       });
       if (picks.length) {
         Store.createStaging({ date: today, docType: "FR-PP-01", woId: bulkWo.id, campaignNo: bulkWo.campaignNo, fgId: DEMO_FG, picks: picks });

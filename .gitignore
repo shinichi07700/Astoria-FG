@@ -1,6 +1,8 @@
 # --- sensitive / local-only files, not for the repo ---
 # Ops scripts embed test-account credentials (password grant)
 /supabase/*.ps1
+# Generated migration bundles - regenerate from supabase/migrations/, they go stale
+/supabase/apply-*.sql
 # Real production Master F/G data exported from the company Google Sheet
 /data/*.csv
 

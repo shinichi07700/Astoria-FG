@@ -209,8 +209,8 @@ window.ViewsSim = (function () {
 
   function printRequest(r) {
     var info = [
-      ["No " + r.type, r.noDoc], ["Tgl", r.date],
-      ["No FG", r.fgKode], ["Nama FG", r.fgName || "-"],
+      ["No " + r.type, r.noDoc], ["Date", r.date],
+      ["F/G Code", r.fgKode], ["Product Description", r.fgName || "-"],
       ["No BOM", r.noBom || "-"], ["Order Qty", Engine.fmtNum(r.orderQty, 0) + " pcs"]
     ];
     var note = r.type === "MR"
@@ -235,8 +235,8 @@ window.ViewsSim = (function () {
 
   function printSim(rec) {
     var info = [
-      ["No Simulasi", rec.noSim], ["Tgl", rec.date],
-      ["No FG", rec.fgKode], ["Nama FG", rec.fgName || "-"],
+      ["Simulation No", rec.noSim], ["Date", rec.date],
+      ["F/G Code", rec.fgKode], ["Product Description", rec.fgName || "-"],
       ["No BOM", rec.noBom || "-"], ["Order Qty", Engine.fmtNum(rec.orderQty, 0) + " pcs"],
       ["Material Request", rec.mrDocNo || "-"], ["Purchase Request", rec.prDocNo || "-"]
     ];
@@ -340,6 +340,9 @@ window.ViewsSim = (function () {
           }
         }
         App.updateUserChip();
+        /* Re-render so role-gated sections (e.g. the Admin-only Demo pipeline
+           card) appear/disappear immediately after the role changes. */
+        App.refresh();
         UI.toast("Settings saved", "ok");
       }, "btn-primary")
     ], UI.el("div", { class: "form-grid" }, [

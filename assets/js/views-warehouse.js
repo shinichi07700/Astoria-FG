@@ -8,7 +8,7 @@
         running balance; SOH is the cached materials.stock_qty,
         allocated is the sum of Reserved staging lines.
      3. Staging - FR-PP-01 (raw) / FR-PP-04 (packaging) pick lists
-        allocated FIFO across Released lots; dispensing posts the
+        allocated FEFO across Released lots; dispensing posts the
         ISSUE and prints the FR-PP-10 weighing identification tag.
    ============================================================ */
 window.ViewsWarehouse = (function () {
@@ -32,7 +32,7 @@ window.ViewsWarehouse = (function () {
   function list(root) {
     var db = Store.get();
     root.appendChild(UI.pageHead("Warehouse",
-      "Receive-driven inventory: quarantine lots with a QA release gate, the Kartu Stock ledger (SOH derived from receipts/issues), and FIFO staging pick lists that allocate stock to a work order.",
+      "Receive-driven inventory: quarantine lots with a QA release gate, the Kartu Stock ledger (SOH derived from receipts/issues), and FEFO staging pick lists that allocate stock to a work order.",
       []));
     root.appendChild(lotsCard(db));
     root.appendChild(kartuCard(db));
@@ -255,10 +255,10 @@ window.ViewsWarehouse = (function () {
       if (!canStage) { UI.toast("Only Warehouse / Production may stage materials", "err"); return; }
       if (!pending.length) { UI.toast("Add at least one pick line", "err"); return; }
       var wo = iWo.value ? Store.get().workOrdersBulk.filter(function (w) { return w.id === iWo.value; })[0] : null;
-      /* FIFO-allocate every requested line across Released lots */
+      /* FEFO-allocate every requested line across Released lots */
       var picks = [], shortages = [];
       pending.forEach(function (p) {
-        var r = Store.fifoPick(p.materialCode, p.qty);
+        var r = Store.fefoPick(p.materialCode, p.qty);
         picks = picks.concat(r.picks);
         if (r.short > 0) shortages.push(p.materialCode + " short " + Engine.fmtNum(r.short) + " " + (p.uom || ""));
       });

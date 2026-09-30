@@ -12,29 +12,31 @@ window.Seed = (function () {
   }
 
   var materials = [
-    /* Raw materials (formula / bulk) - sample composition */
-    mat("RM-1001", "Aqua (Demineralized Water)", "RM", "kg", 850, true, "Local supplier"),
-    mat("RM-1002", "Glycerin USP", "RM", "kg", 120, true, "Local supplier"),
-    mat("RM-1003", "Niacinamide PC", "RM", "kg", 25, true, "Imported"),
-    mat("RM-1004", "Propylene Glycol", "RM", "kg", 60, true, "Local supplier"),
-    mat("RM-1005", "Phenoxyethanol & Ethylhexylglycerin", "RM", "kg", 18, true, "Imported"),
-    mat("RM-1006", "Allantoin", "RM", "kg", 6, true, "Imported"),
-    mat("RM-1007", "Disodium EDTA", "RM", "kg", 4, true, "Imported"),
-    mat("RM-1008", "Citric Acid Anhydrous", "RM", "kg", 3, true, "Local supplier"),
-    mat("RM-1009", "Parfum / Fragrance", "RM", "kg", 2.5, true, "Imported"),
+    /* Raw materials (formula / bulk) - sample composition.
+       RM-INT = locally sourced, RM-EXT = imported. */
+    mat("RM-1001", "Aqua (Demineralized Water)", "RM-INT", "gr", 850, true, "Local supplier"),
+    mat("RM-1002", "Glycerin USP", "RM-INT", "gr", 120, true, "Local supplier"),
+    mat("RM-1003", "Niacinamide PC", "RM-EXT", "gr", 25, true, "Imported"),
+    mat("RM-1004", "Propylene Glycol", "RM-INT", "gr", 60, true, "Local supplier"),
+    mat("RM-1005", "Phenoxyethanol & Ethylhexylglycerin", "RM-EXT", "gr", 18, true, "Imported"),
+    mat("RM-1006", "Allantoin", "RM-EXT", "gr", 6, true, "Imported"),
+    mat("RM-1007", "Disodium EDTA", "RM-EXT", "gr", 4, true, "Imported"),
+    mat("RM-1008", "Citric Acid Anhydrous", "RM-INT", "gr", 3, true, "Local supplier"),
+    mat("RM-1009", "Parfum / Fragrance", "RM-EXT", "gr", 2.5, true, "Imported"),
 
     /* Packaging (kemas) - from BOM Request 01/020/BoM/VII/2026 */
-    mat("30200001", "Botol Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 1200, true, "Customer"),
-    mat("30200002", "Cap Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 1200, true, "Customer"),
-    mat("30200003", "Inner plug Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 1150, true, "Customer"),
-    mat("30200004", "Sticker front Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 0, true, "Customer"),
-    mat("30200005", "Sticker back Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 980, true, "Customer"),
-    mat("30200006", "Satuan Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 1000, true, "Customer"),
-    mat("20200001", "Shrink Marieskinlian Glowing Skin Toner 100 ml", "PM", "pcs", 5000, true, "Astoria"),
+    mat("30200001", "Botol Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 1200, true, "Customer"),
+    mat("30200002", "Cap Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 1200, true, "Customer"),
+    mat("30200003", "Inner plug Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 1150, true, "Customer"),
+    mat("30200004", "Sticker front Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 0, true, "Customer"),
+    mat("30200005", "Sticker back Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 980, true, "Customer"),
+    mat("30200006", "Satuan Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 1000, true, "Customer"),
+    mat("20200001", "Shrink Marieskinlian Glowing Skin Toner 100 ml", "PKG-INT", "pcs", 5000, true, "Astoria"),
 
-    /* Auxiliary */
-    mat("20010004", "Mbox medium", "AX", "pcs", 420, true, "Astoria"),
-    mat("20010002", "Lakban 45 cm Clear", "AX", "roll", 36, true, "Astoria")
+    /* Packing consumables (still packaging-side, so they show in the BOM
+       Kemas pool). QA/QC auxiliary items use the separate AUX-QA category. */
+    mat("20010004", "Mbox medium", "PKG-INT", "pcs", 420, true, "Astoria"),
+    mat("20010002", "Lakban 45 cm Clear", "PKG-INT", "pcs", 36, true, "Astoria")
   ];
 
   function fg(ffs, fps, desc, na, exp, disc, user, time) {
@@ -89,15 +91,15 @@ window.Seed = (function () {
     status: "Approved",
     items: [
       /* A. Formula (bulk) raw materials - per batch of 1000 pcs */
-      bomItem("FORMULA", "RM-1001", 0.09, 90, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1002", 0.005, 5, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1003", 0.002, 2, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1004", 0.003, 3, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1005", 0.0008, 0.8, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1006", 0.0002, 0.2, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1007", 0.00005, 0.05, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1008", 0.00002, 0.02, "kg", "Astoria", 0),
-      bomItem("FORMULA", "RM-1009", 0.0003, 0.3, "kg", "Astoria", 5),
+      bomItem("FORMULA", "RM-1001", 0.09, 90, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1002", 0.005, 5, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1003", 0.002, 2, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1004", 0.003, 3, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1005", 0.0008, 0.8, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1006", 0.0002, 0.2, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1007", 0.00005, 0.05, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1008", 0.00002, 0.02, "gr", "Astoria", 0),
+      bomItem("FORMULA", "RM-1009", 0.0003, 0.3, "gr", "Astoria", 5),
       /* B. Kemas (packaging) components - per piece */
       bomItem("KEMAS", "30200001", 1, 1000, "pcs", "Customer", 0),
       bomItem("KEMAS", "30200002", 1, 1000, "pcs", "Customer", 0),
@@ -107,7 +109,7 @@ window.Seed = (function () {
       bomItem("KEMAS", "30200006", 1, 1000, "pcs", "Customer", 0),
       bomItem("KEMAS", "20200001", 1, 1000, "pcs", "Astoria", 0),
       bomItem("KEMAS", "20010004", 1 / 60, 1000 / 60, "pcs", "Astoria", 0, "1 mbox per 60 pcs"),
-      bomItem("KEMAS", "20010002", 0.002, 2, "roll", "Astoria", 0, "1 roll per 500 pcs")
+      bomItem("KEMAS", "20010002", 0.002, 2, "pcs", "Astoria", 0, "1 roll per 500 pcs")
     ]
   }];
 

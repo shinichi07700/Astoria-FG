@@ -70,7 +70,7 @@ window.Netting = (function () {
       var soh = num(l.soh), allocated = num(l.allocated);
       var available = customer ? 0 : Math.max(0, soh - allocated);
       return {
-        section: "FORMULA", materialCode: l.materialCode, name: l.name || "", unit: l.unit || "kg",
+        section: "FORMULA", materialCode: l.materialCode, name: l.name || "", unit: l.unit || "gr",
         pct: pct, gross: gross, soh: soh, allocated: allocated, available: round4(available),
         net: round4(Math.max(0, gross - available)),
         supportedBy: l.supportedBy || "Astoria", customer: customer,

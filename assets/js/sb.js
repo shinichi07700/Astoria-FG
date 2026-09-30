@@ -100,6 +100,20 @@ window.SB = (function () {
     }
     return page(0);
   }
+  /* Column-existence probe. PostgREST validates the select list against the
+     schema cache before RLS filters any row, so an empty table still answers:
+     200 means the column is there, 42703 / PGRST204 means it is not. Callers
+     use it to pick a row shape instead of guessing from a hydrated row. */
+  function hasColumn(table, column) {
+    return rest("GET", table + "?select=" + encodeURIComponent(column) + "&limit=1")
+      .then(function () { return true; })
+      .catch(function (err) {
+        if (err && (err.code === "42703" || err.code === "PGRST204" ||
+            err.code === "42P01" || err.code === "PGRST205" ||
+            /could not find the column/i.test(err.message || ""))) return false;
+        throw err;
+      });
+  }
   function upsert(table, rows) {
     if (!rows || !rows.length) return Promise.resolve(null);
     return rest("POST", table, rows, { Prefer: "resolution=merge-duplicates,return=minimal" });
@@ -115,6 +129,7 @@ window.SB = (function () {
   return {
     init: init, enabled: enabled, restore: restore, me: me,
     signIn: signIn, signOut: signOut, ensureToken: ensureToken,
-    selectAll: selectAll, upsert: upsert, insert: insert, remove: remove
+    selectAll: selectAll, hasColumn: hasColumn,
+    upsert: upsert, insert: insert, remove: remove
   };
 })();
