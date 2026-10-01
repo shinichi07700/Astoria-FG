@@ -1,0 +1,130 @@
+{
+  "name": "Astoria - Formula PDF OCR",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "astoria/formula-ocr",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "8f1e6c40-2f3a-4b8e-9d21-6c5a7e0b1a44"
+    },
+    {
+      "parameters": { "operation": "pdf", "binaryPropertyName": "file" },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [420, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "cond-text-layer",
+              "leftValue": "={{ ($json.text || \"\").length }}",
+              "rightValue": 100,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Has Text Layer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [640, 220]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are parsing a cosmetic product formula PDF from PT Astoria Prima. The raw extracted text is below between <document> tags. Extract exactly what is printed - never invent, guess or calculate a value that is not present.\n\nReturn ONLY a JSON object with this exact shape:\n{\n  \"ffs\": \"formula code, e.g. MR03-BN-01\",\n  \"kategori\": \"product category as printed\",\n  \"customer\": \"customer name as printed\",\n  \"bj\": number or null,\n  \"phMin\": number or null,\n  \"phMax\": number or null,\n  \"viscosity\": \"range as printed, e.g. '20000 - 30000 cP'\",\n  \"stabTk\": \"Running | Pass | Fail | -\",\n  \"stabTkul\": \"Running | Pass | Fail | -\",\n  \"stabT50\": \"Running | Pass | Fail | -\",\n  \"stabTm\": \"Running | Pass | Fail | -\",\n  \"note\": \"any general note\",\n  \"lines\": [ { \"materialName\": \"as printed\", \"materialCode\": \"code if printed, else empty\", \"pct\": number, \"note\": \"\" } ]\n}\n\nRules:\n- Values not present in the document must be null (numbers) or \"\" (strings) - never guessed.\n- Percentages must sum to 100 across lines; copy them exactly as printed.\n- If there are multiple formula tables, parse the first/main one only.\n- Output raw JSON only, no markdown fences, no commentary.\n\n<document>\n{{ $json.text }}\n</document>"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Extract Formula (OpenAI)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [880, 220]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": { "temperature": 0 }
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [880, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = (s) => String(s == null ? \"\" : s).trim();\nconst num = (v) => {\n  if (v == null || v === \"\") return null;\n  const n = Number(String(v).replace(\",\", \".\"));\n  return isNaN(n) ? null : n;\n};\nconst stab = (v) => {\n  const s = strip(v).toLowerCase();\n  if (!s) return \"-\";\n  if (s === \"running\") return \"Running\";\n  if (s === \"pass\") return \"Pass\";\n  if (s === \"fail\") return \"Fail\";\n  return \"-\";\n};\n\nlet raw = \"\";\nfor (const item of $input.all()) {\n  raw += strip(item.json.text || item.json.output || item.json.response || \"\");\n}\nraw = raw.replace(/^```(?:json)?/i, \"\").replace(/```$/, \"\").trim();\n\nlet parsed = null;\nlet ok = false;\ntry {\n  parsed = JSON.parse(raw);\n  ok = !!parsed;\n} catch (e) {\n  ok = false;\n}\nif (!ok) {\n  return [{ json: { ok: false, error: \"OpenAI did not return valid JSON - try again or enter the formula manually\" } }];\n}\n\nconst warnings = [];\nconst missing = (label, v) => { if (v == null || v === \"\") warnings.push(label + \" not found in document - please fill in\"); };\n\nconst formula = {\n  ffs: strip(parsed.ffs),\n  kategori: strip(parsed.kategori),\n  customer: strip(parsed.customer),\n  bj: num(parsed.bj),\n  phMin: num(parsed.phMin),\n  phMax: num(parsed.phMax),\n  viscosity: strip(parsed.viscosity),\n  stabTk: stab(parsed.stabTk),\n  stabTkul: stab(parsed.stabTkul),\n  stabT50: stab(parsed.stabT50),\n  stabTm: stab(parsed.stabTm),\n  note: strip(parsed.note),\n  lines: []\n};\n\nmissing(\"Formula code (FFS)\", formula.ffs);\nmissing(\"Category\", formula.kategori);\nmissing(\"Customer\", formula.customer);\nmissing(\"Viscosity\", formula.viscosity);\nif (formula.bj == null) warnings.push(\"BJ not found in document - please fill in\");\n\nconst stabWarn = (key, rawVal) => {\n  const r = strip(rawVal);\n  if (r && r !== \"-\" && formula[key] === \"-\") {\n    warnings.push(\"Stability \" + key.slice(4).toUpperCase() + \": unrecognized value '\" + r + \"' - set to '-'\");\n  }\n};\nstabWarn(\"stabTk\", parsed.stabTk);\nstabWarn(\"stabTkul\", parsed.stabTkul);\nstabWarn(\"stabT50\", parsed.stabT50);\nstabWarn(\"stabTm\", parsed.stabTm);\n\nconst inLines = Array.isArray(parsed.lines) ? parsed.lines : [];\nfor (const ln of inLines) {\n  const name = strip(ln && ln.materialName);\n  const code = strip(ln && ln.materialCode);\n  if (!name && !code) continue;\n  const pct = num(ln && ln.pct);\n  formula.lines.push({ materialName: name, materialCode: code, pct: pct == null ? 0 : pct, note: strip(ln && ln.note) });\n}\nif (!formula.lines.length) warnings.push(\"No composition lines found in document - add materials manually\");\n\nlet fileName = \"upload.pdf\";\ntry {\n  const wh = $(\"Webhook\").first();\n  if (wh.binary && wh.binary.file && wh.binary.file.fileName) fileName = wh.binary.file.fileName;\n} catch (e) { /* keep fallback */ }\n\nconst document = { fileName, pages: null, parser: \"openai\" };\nreturn [{ json: { ok: true, document, formula, warnings } }];"
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Normalize Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst j = (items[0] && items[0].json) || {};\nlet msg;\nif (j.error) {\n  msg = \"Could not read the PDF: \" + String(j.error.message || j.error);\n} else {\n  msg = \"This looks like a scanned PDF (no text layer found). Please provide a digitally exported PDF.\";\n}\nreturn [{ json: { ok: false, error: msg } }];"
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Build Error Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 520]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1360, 340]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [ [ { "node": "Extract from File", "type": "main", "index": 0 } ] ] },
+    "Extract from File": {
+      "main": [
+        [ { "node": "Has Text Layer?", "type": "main", "index": 0 } ],
+        [ { "node": "Build Error Response", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Has Text Layer?": {
+      "main": [
+        [ { "node": "Extract Formula (OpenAI)", "type": "main", "index": 0 } ],
+        [ { "node": "Build Error Response", "type": "main", "index": 0 } ]
+      ]
+    },
+    "OpenAI Chat Model": { "ai_languageModel": [ [ { "node": "Extract Formula (OpenAI)", "type": "ai_languageModel", "index": 0 } ] ] },
+    "Extract Formula (OpenAI)": { "main": [ [ { "node": "Normalize Response", "type": "main", "index": 0 } ] ] },
+    "Normalize Response": { "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ] },
+    "Build Error Response": { "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1", "executionTimeout": 120 },
+  "pinData": {},
+  "meta": {
+    "instanceId": "astoria-formula-ocr-template",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
