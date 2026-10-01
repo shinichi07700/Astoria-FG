@@ -9,3 +9,12 @@ window.ASTORIA_SUPABASE = {
   url: "https://twqqostpzynvwymjwxpf.supabase.co",
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3cXFvc3Rwenludnd5bWp3eHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4ODk0MzEsImV4cCI6MjA3MjQ2NTQzMX0.dL_w5UkqVoC_wvWLSS5YVjaRY-mjAKfHcYsRcGm9iV8"
 };
+
+/* Formula PDF import (n8n + OpenAI). Fill both values after importing
+   integrations/n8n/formula-ocr.workflow.json - see that folder's README.
+   When either value is empty the "Import from PDF" button stays hidden.
+   The token is client-visible by design (internal tool; rotate if leaked). */
+window.ASTORIA_OCR = {
+  webhookUrl: "",   /* e.g. https://<n8n-host>/webhook/astoria/formula-ocr */
+  token: ""         /* X-Astoria-Token Header Auth value */
+};

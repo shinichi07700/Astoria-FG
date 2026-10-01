@@ -844,3 +844,23 @@ body.login-mode .topbar-right { display: none; }
 .doc .sign-line { border-top: 1px solid #000; padding-top: 3px; }
 .doc .doc-note { margin-top: 10px; font-size: 9.5px; color: #333; }
 .doc .doc-foot { margin-top: 8px; font-size: 9.5px; display: flex; justify-content: space-between; color: #333; }
+
+/* OCR import - spinner modal + amber warning banner */
+.spinner {
+  width: 28px; height: 28px; margin: 0 auto;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.import-banner {
+  background: var(--amber-soft);
+  border: 1px solid #e8cf9a;
+  color: var(--amber);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.import-banner ul { margin: 6px 0 0; padding-left: 18px; }

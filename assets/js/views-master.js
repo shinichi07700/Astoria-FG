@@ -885,9 +885,14 @@ window.ViewsMaster = (function () {
   function formulas(root) {
     var db = Store.get();
     var canEdit = RBAC.canEditMaster("formulas");
+    var headBtns = [];
+    if (canEdit && window.OCRImport && OCRImport.configured()) {
+      headBtns.push(UI.btn("Import from PDF", importFormulaPdf, ""));
+    }
+    if (canEdit) headBtns.push(UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary"));
     root.appendChild(UI.pageHead("Master Formula (FFS)",
       "Bulk formula parameters (form FR-RD-09): specific gravity, pH range, viscosity and the TK / TKUL / T50 / TM stability tests. Maintained by RND Formula; the recipe percentages are entered on each production BOM.",
-      canEdit ? [UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary")] : []));
+      headBtns));
     var search = UI.input({ placeholder: "Search FFS code / kategori / viscosity...", value: formulaFilter.q });
     search.addEventListener("input", function () { formulaFilter.q = search.value; draw(); });
     var bodyWrap = UI.el("div");
@@ -940,12 +945,77 @@ window.ViewsMaster = (function () {
       text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the formula master is maintained by RND Formula." }));
   }
 
-  function formulaEditor(rec) {
+  /* ------------------------------------------------------------------
+     Import from PDF (n8n webhook -> OpenAI -> prefilled editor).
+     Visible only when window.ASTORIA_OCR is configured AND the user
+     may edit Master Formula.
+     ------------------------------------------------------------------ */
+  function importFormulaPdf() {
+    var inp = UI.el("input", { type: "file", accept: ".pdf,application/pdf", style: "display:none" });
+    document.body.appendChild(inp);
+    inp.addEventListener("change", function () {
+      if (inp.files && inp.files[0]) {
+        var f = inp.files[0];
+        inp.remove();
+        runFormulaOcr(f);
+      } else {
+        inp.remove();
+      }
+    });
+    inp.click();
+  }
+
+  function runFormulaOcr(file) {
+    var sp = UI.el("div", { class: "spinner" });
+    var sub = UI.el("p", { style: "margin:8px 0 0;font-size:12px;color:var(--muted);text-align:center" },
+      ["Parsing " + file.name + " with n8n\u2026 usually 10\u201330 s"]);
+    var box = UI.el("div", { style: "padding:8px 0" }, [sp, sub]);
+    UI.modal({ title: "Import formula from PDF", body: box, actions: [], wide: false });
+    var t0 = Date.now();
+    var timer = setInterval(function () {
+      sub.textContent = "Parsing " + file.name + " with n8n\u2026 " + Math.round((Date.now() - t0) / 1000) + " s (limit 120 s)";
+    }, 1000);
+    function done() { clearInterval(timer); UI.closeModal(); }
+    OCRImport.parsePdf(file).then(function (payload) {
+      var res = OCRImport.mapToFormulaDraft(payload, Store.get());
+      done();
+      formulaEditor(res.existing, {
+        importInfo: {
+          fileName: (payload.document && payload.document.fileName) || file.name,
+          warnings: res.warnings
+        },
+        importData: res.draft
+      });
+    }, function (err) {
+      done();
+      UI.toast((err && err.message) || "Import failed", "err");
+    });
+  }
+
+  function importBanner(info, existingRec) {
+    var list = [UI.el("div", {}, ["Imported from " + info.fileName + " \u2014 check every value before saving."])];
+    if (existingRec) {
+      list.push(UI.el("div", {}, ["Formula " + existingRec.id + " already exists \u2014 saving will overwrite its parameters and composition."]));
+    }
+    if (info.warnings && info.warnings.length) {
+      list.push(UI.el("ul", {}, info.warnings.map(function (w) { return UI.el("li", {}, [w]); })));
+    }
+    return UI.el("div", { class: "import-banner" }, list);
+  }
+
+  function formulaEditor(rec, opts) {
     if (!RBAC.canEditMaster("formulas")) { UI.toast("Formula master is read-only for your role", "err"); return; }
+    opts = opts || {};
     var isNew = !rec;
     var d = Object.assign({ id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "",
       viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-", note: "", lines: [] }, rec || {});
     if (!d.lines) d.lines = [];
+    if (opts.importData) {
+      Object.keys(opts.importData).forEach(function (k) {
+        if (opts.importData[k] !== undefined) d[k] = opts.importData[k];
+      });
+      d.lines = (opts.importData.lines || []).map(function (l) { return Object.assign({}, l); });
+    }
     var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Urutan]" });
     var iKat = UI.input({ value: d.kategori, placeholder: "e.g. Cream, Lotion, Serum" });
     var iCust = customerCombo(d.customerId);
@@ -1049,8 +1119,9 @@ window.ViewsMaster = (function () {
       UI.field("Note", iNote),
       fieldset("Material Composition", [compWrap])
     ]);
+    if (opts.importInfo) body.insertBefore(importBanner(opts.importInfo, rec), body.firstChild);
     UI.modal({
-      title: isNew ? "New Formula (FFS)" : "Edit Formula - " + rec.id,
+      title: (isNew ? "New Formula (FFS)" : "Edit Formula - " + rec.id) + (opts.importInfo ? " (imported)" : ""),
       body: body, wide: true,
       actions: [{
         label: "Save Formula", cls: "btn-primary", onClick: function () {
@@ -1069,6 +1140,9 @@ window.ViewsMaster = (function () {
           /* clean lines: remove empty material rows */
           d.lines = d.lines.filter(function (l) { return l.materialCode; });
           Store.saveFormula(d, isNew, rec ? rec.id : null);
+          if (opts.importInfo) {
+            Store.audit("IMPORT", "Master Formula", d.id + " confirmed from " + opts.importInfo.fileName);
+          }
           UI.closeModal(); App.refresh();
           UI.toast("Formula " + d.id + " saved", "ok");
         }
