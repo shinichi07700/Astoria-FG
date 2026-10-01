@@ -113,9 +113,52 @@ window.OCRImport = (function () {
     return { draft: draft, warnings: warnings, existing: existing };
   }
 
-  var api = { norm: norm, num: num, stab: stab,
+  function configured() {
+    var c = window.ASTORIA_OCR || {};
+    return !!(c.webhookUrl && c.token);
+  }
+  /* POSTs the file to the n8n webhook. Every rejection message is
+     written to be shown to the user as-is. */
+  function parsePdf(file, opts) {
+    opts = opts || {};
+    var cfg = window.ASTORIA_OCR || {};
+    if (!configured()) return Promise.reject(new Error("OCR import is not configured - fill webhookUrl and token in supabase-config.js"));
+    if (!/\.pdf$/i.test(String((file && file.name) || ""))) return Promise.reject(new Error("Only .pdf files are supported - convert the Word document to PDF first"));
+    if (!file || file.size > 10 * 1024 * 1024) return Promise.reject(new Error("The PDF is larger than 10 MB"));
+    var timeoutMs = opts.timeoutMs || 120000;
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
+    var fd = new FormData();
+    fd.append("file", file, file.name);
+    return window.fetch(cfg.webhookUrl, {
+      method: "POST",
+      headers: { "X-Astoria-Token": cfg.token || "" },
+      body: fd,
+      signal: ctrl.signal
+    }).then(function (res) {
+      return res.text().then(function (txt) {
+        var body = null;
+        try { body = JSON.parse(txt); } catch (e) { body = null; }
+        if (body && body.ok === true) return body;
+        var err = new Error(body && body.error ? String(body.error)
+          : "Unexpected response from n8n (HTTP " + (res.status || 0) + ")");
+        err.fromN8n = true;
+        throw err;
+      });
+    }).then(function (body) {
+      clearTimeout(timer);
+      return body;
+    }, function (err) {
+      clearTimeout(timer);
+      if (err && err.name === "AbortError") throw new Error("Timed out waiting for the n8n webhook - try again or enter the formula manually");
+      if (err && err.fromN8n) throw err;
+      throw new Error("Could not reach the n8n webhook: " + ((err && err.message) || err));
+    });
+  }
+
+  var api = { configured: configured, norm: norm, num: num, stab: stab,
     matchCustomer: matchCustomer, matchMaterial: matchMaterial,
-    mapToFormulaDraft: mapToFormulaDraft };
+    mapToFormulaDraft: mapToFormulaDraft, parsePdf: parsePdf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   return api;
 })();

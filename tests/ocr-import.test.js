@@ -126,6 +126,88 @@ eq("missing customer warning", R2.warnings.filter(function (w) { return w.indexO
 eq("missing payload no existing", R2.existing, null);
 eq("missing payload no sigma warning", R2.warnings.filter(function (w) { return w.indexOf("sum to") >= 0; }).length, 0);
 
-/* ---------- summary ---------- */
-console.log("\n" + (fails ? "RESULT: FAIL (" + fails + "/" + count + ")" : "RESULT: ALL PASS (" + count + ")"));
-process.exit(fails ? 1 : 0);
+/* ---------- 6. parsePdf (stubbed fetch) ---------- */
+function makeFile(name, size) {
+  var f = new File(["x"], name, { type: "application/pdf" });
+  if (size) Object.defineProperty(f, "size", { value: size });
+  return f;
+}
+function stubFetch(handler) { window.fetch = handler; }
+function testRejects(name, promise, wantSub) {
+  return promise.then(function () {
+    count++; fails++;
+    console.log("FAIL " + name + " - resolved, expected rejection");
+  }, function (err) {
+    count++;
+    var msg = (err && err.message) || String(err);
+    if (msg.indexOf(wantSub) >= 0) { console.log("PASS " + name); }
+    else { fails++; console.log("FAIL " + name + "  got='" + msg + "' want substring='" + wantSub + "'"); }
+  });
+}
+
+(async function () {
+  window.ASTORIA_OCR = { webhookUrl: "", token: "" };
+  eq("configured false when blank", O.configured(), false);
+  await testRejects("parsePdf rejects unconfigured",
+    O.parsePdf(makeFile("a.pdf")), "not configured");
+
+  window.ASTORIA_OCR = { webhookUrl: "https://example.invalid/hook", token: "tok-123" };
+  eq("configured true when filled", O.configured(), true);
+  await testRejects("parsePdf rejects non-pdf",
+    O.parsePdf(makeFile("formula.docx")), "Only .pdf files");
+  await testRejects("parsePdf rejects >10MB",
+    O.parsePdf(makeFile("big.pdf", 11 * 1024 * 1024)), "larger than 10 MB");
+
+  /* success: assert URL, method, token header, multipart field 'file' */
+  var seen = null;
+  stubFetch(function (url, init) {
+    seen = { url: url, init: init };
+    return Promise.resolve({
+      status: 200,
+      text: function () { return Promise.resolve(JSON.stringify({ ok: true, formula: { ffs: "X" }, warnings: [] })); }
+    });
+  });
+  var body = await O.parsePdf(makeFile("a.pdf"));
+  eq("parsePdf resolves ok body", body.ok, true);
+  eq("parsePdf posts webhook URL", seen.url, "https://example.invalid/hook");
+  eq("parsePdf method POST", seen.init.method, "POST");
+  eq("parsePdf token header", seen.init.headers["X-Astoria-Token"], "tok-123");
+  eq("parsePdf multipart field 'file'", seen.init.body.get("file").name, "a.pdf");
+  eq("parsePdf passes abort signal", typeof seen.init.signal, "object");
+
+  /* ok:false -> n8n error text */
+  stubFetch(function () {
+    return Promise.resolve({ status: 200, text: function () {
+      return Promise.resolve(JSON.stringify({ ok: false, error: "This looks like a scanned PDF. Please provide a digitally exported PDF." }));
+    } });
+  });
+  await testRejects("parsePdf surfaces ok:false error",
+    O.parsePdf(makeFile("a.pdf")), "scanned PDF");
+
+  /* non-JSON body -> status message */
+  stubFetch(function () {
+    return Promise.resolve({ status: 502, text: function () { return Promise.resolve("<html>bad gateway</html>"); } });
+  });
+  await testRejects("parsePdf handles non-JSON",
+    O.parsePdf(makeFile("a.pdf")), "Unexpected response from n8n (HTTP 502)");
+
+  /* network failure */
+  stubFetch(function () { return Promise.reject(new TypeError("Failed to fetch")); });
+  await testRejects("parsePdf wraps network error",
+    O.parsePdf(makeFile("a.pdf")), "Could not reach the n8n webhook");
+
+  /* abort -> timeout message */
+  stubFetch(function (url, init) {
+    return new Promise(function (resolve, reject) {
+      init.signal.addEventListener("abort", function () {
+        var e = new Error("aborted"); e.name = "AbortError"; reject(e);
+      });
+    });
+  });
+  await testRejects("parsePdf times out on abort",
+    O.parsePdf(makeFile("a.pdf"), { timeoutMs: 25 }), "Timed out waiting for the n8n webhook");
+
+  /* ---------- summary ---------- */
+  console.log("\n" + (fails ? "RESULT: FAIL (" + fails + "/" + count + ")" : "RESULT: ALL PASS (" + count + ")"));
+  process.exit(fails ? 1 : 0);
+})();
