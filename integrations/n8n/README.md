@@ -18,7 +18,9 @@ with a clear message (see "Limitations").
    `Astoria OCR Token`, configure:
    - Header Name: `X-Astoria-Token`
    - Header Value: a long random string (this is your shared token).
-   Then open the imported **Webhook** node and select this credential.
+   Then open the imported **Webhook** node — its Authentication is preset to
+   "Header Auth" — and select the credential you just created. (On import, n8n may
+   prompt to map the missing "Astoria OCR Token" credential; assign the one created here.)
 3. **OpenAI credential** — on the **OpenAI Chat Model** node, select your OpenAI account
    (model is fixed to `gpt-4o-mini`, temperature 0).
 4. **CORS** — the Webhook node ships with `allowedOrigins: "*"`. For production, set it to
@@ -48,10 +50,12 @@ Every response is HTTP 200 — check the `ok` flag, not the status code.
 
 ## Changing the captured fields
 
-The RND field set is provisional. To add/remove a captured field, edit **only** the prompt in
-the *Extract Formula (OpenAI)* node (and, if the shape changes, the *Normalize Response* code
-node). The web app ignores unknown keys and fills missing ones with warnings, so no app
-change is required for additive field changes.
+The RND field set is provisional. Removing a captured field needs a prompt edit only, in the
+*Extract Formula (OpenAI)* node. Adding one needs the prompt edit **and** the field added to
+the whitelist in the *Normalize Response* code node — fields it does not map are dropped.
+Either way **no browser/app change is ever required**: the app ignores unknown keys and fills
+missing ones with warnings. The app's prefill map can optionally be updated later if the new
+field should prefill something.
 
 ## Limitations
 
