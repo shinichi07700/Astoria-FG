@@ -125,6 +125,25 @@ window.App = (function () {
     }
   }
 
+  /* An hour without input ends the session. Signed in, that means revoking
+     the cloud token; in local mode there is no account to close, so the page
+     just reloads. Saved-but-unpushed edits survive either way - they sit in
+     the sync queue and flush on the next sign-in. */
+  function onIdleExpire() {
+    IdleSession.markNotice();
+    var signedIn = window.Sync && Sync.enabled() && window.SB && SB.me();
+    if (signedIn) Sync.signOut().then(function () { location.reload(); });
+    else location.reload();
+  }
+
+  /* The notice has to be read after the reload that the timeout itself causes,
+     so it travels through sessionStorage rather than a variable. */
+  function showIdleNotice() {
+    if (window.IdleSession && IdleSession.takeNotice()) {
+      UI.toast("Signed out after 1 hour of inactivity.");
+    }
+  }
+
   function wireChrome() {
     document.getElementById("user-chip").addEventListener("click", function () {
       /* Self-service account box (own password) for every role - Settings is
@@ -171,6 +190,8 @@ window.App = (function () {
     }
     renderNav();
     go("dashboard");
+    IdleSession.start(onIdleExpire);
+    showIdleNotice();
   }
 
   function updateSyncChip() {
@@ -210,6 +231,7 @@ window.App = (function () {
     var wrap = UI.el("div", { class: "login-wrap" });
     view.appendChild(wrap);
     signInCard(wrap);
+    showIdleNotice();
   }
 
   function loginLogo() {
