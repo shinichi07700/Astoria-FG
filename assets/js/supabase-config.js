@@ -6,8 +6,8 @@
    Leave both empty to keep running in local-only mode.
    ============================================================ */
 window.ASTORIA_SUPABASE = {
-  url: "https://twqqostpzynvwymjwxpf.supabase.co",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3cXFvc3Rwenludnd5bWp3eHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4ODk0MzEsImV4cCI6MjA3MjQ2NTQzMX0.dL_w5UkqVoC_wvWLSS5YVjaRY-mjAKfHcYsRcGm9iV8"
+  url: "https://txruugumfhnnqimvrmsp.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4cnV1Z3VtZmhubnFpbXZybXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDk5NjAsImV4cCI6MjEwNjkyNTk2MH0.R_FIDxygt7f23jPYDFwVk6JqeUDRfJXttnrjB8C4H30"
 };
 
 /* Formula PDF import (n8n + OpenAI). Fill both values after importing
