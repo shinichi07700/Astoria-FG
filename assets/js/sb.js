@@ -36,7 +36,7 @@ window.SB = (function () {
       var j = null;
       try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
       if (!r.ok) {
-        var msg = (j && (j.error_description || j.msg || j.error)) || t || ("HTTP " + r.status);
+        var msg = (j && (j.error_description || j.message || j.msg || j.error)) || t || ("HTTP " + r.status);
         var err = new Error(msg);
         err.status = r.status;
         err.code = (j && j.code) || "";
@@ -196,6 +196,12 @@ window.SB = (function () {
   function remove(table, filter) {
     return rest("DELETE", table + (filter ? "?" + filter : ""), undefined, { Prefer: "return=minimal" });
   }
+  /* PostgREST function call: POST /rest/v1/rpc/<fn> with a JSON args object.
+     Used for the security definer helpers that re-check the caller's role
+     inside the database, so the browser only ever needs its own JWT. */
+  function rpc(fn, args) {
+    return rest("POST", "rpc/" + encodeURIComponent(fn), args || {});
+  }
 
   return {
     init: init, enabled: enabled, restore: restore, me: me,
@@ -203,6 +209,6 @@ window.SB = (function () {
     requestRecovery: requestRecovery, resolveRecovery: resolveRecovery,
     inRecovery: inRecovery, clearRecovery: clearRecovery,
     selectAll: selectAll, hasColumn: hasColumn,
-    upsert: upsert, patch: patch, insert: insert, remove: remove
+    upsert: upsert, patch: patch, insert: insert, remove: remove, rpc: rpc
   };
 })();

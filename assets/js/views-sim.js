@@ -368,6 +368,65 @@ window.ViewsSim = (function () {
       }, "btn-danger")
     ])));
 
+    /* Audit log housekeeping: cloud-only, because the cloud audit_log is the
+       one that grows without bound - the offline audit stays capped at 1000
+       rows in this browser. The RPCs behind it re-check the Admin role and
+       the 365-day floor server-side, so this card only shapes parameters. */
+    if (cloud && window.AuditPrune) {
+      function loadAuditStats(vals) {
+        Object.keys(vals).forEach(function (k) { vals[k].textContent = "..."; });
+        AuditPrune.loadStats().then(function (s) {
+          vals.total.textContent = String(s.row_count);
+          vals.oldest.textContent = AuditPrune.fmtOldest(s.oldest);
+          vals.size.textContent = AuditPrune.fmtBytes(s.size_bytes);
+        }).catch(function () {
+          vals.total.textContent = vals.oldest.textContent = vals.size.textContent = "-";
+        });
+      }
+      function pruneDayInput() {
+        var i = UI.input({ type: "date", id: "audit-prune-day" });
+        var min = AuditPrune.floorDate(Date.now());
+        if (min) { i.min = min; i.value = min; }
+        return i;
+      }
+      var statVals = {};
+      var kvPairs = [["Total entries", "total"], ["Oldest entry (WIB)", "oldest"], ["Table size", "size"]];
+      var kvEls = [];
+      kvPairs.forEach(function (pr) {
+        var v = UI.el("div", { text: "..." });
+        statVals[pr[1]] = v;
+        kvEls.push(UI.el("div", { text: pr[0] }), v);
+      });
+      root.appendChild(UI.card("Audit log housekeeping", [
+        UI.btn("Refresh stats", function () { loadAuditStats(statVals); })
+      ], UI.el("div", {}, [
+        UI.el("div", { class: "kv" }, kvEls),
+        UI.el("div", { class: "form-grid", style: "margin-top:10px" }, [
+          UI.field("Prune entries older than (WIB date)", pruneDayInput(),
+            "Retention floor: the last " + AuditPrune.RETENTION_DAYS + " days can never be pruned - the server refuses a newer cutoff.")
+        ]),
+        UI.el("div", { class: "btn-row", style: "margin-top:10px" }, [
+          UI.btn("Prune older entries", function () {
+            var day = document.getElementById("audit-prune-day").value;
+            if (!AuditPrune.cutoffUtc(day)) { UI.toast("Pick a cutoff date first.", "err"); return; }
+            UI.confirmDialog("Permanently delete every audit entry older than " + day + " (WIB)? This cannot be undone.", function () {
+              AuditPrune.prune(day).then(function (res) {
+                /* Keep the local working copy in step: drop what the server
+                   dropped, then append the prune action itself. */
+                db.audit = db.audit.filter(function (a) { return (a.ts || "").slice(0, 10) >= day; });
+                Store.audit("DELETE", "Audit Log", "pruned " + res.removed + " rows older than " + day + " (WIB)");
+                Store.save();
+                if (window.Sync && Sync.enabled()) Sync.flush();
+                UI.toast(res.removed + " audit entries pruned", "ok");
+                App.refresh();
+              }).catch(function (err) { UI.toast("Prune failed: " + err.message, "err"); });
+            }, "Prune");
+          }, "btn-danger")
+        ])
+      ])));
+      loadAuditStats(statVals);
+    }
+
     /* Demo pipeline (Admin-only): builds a fully-linked sample chain up to an
        APPROVED packing work order so the FG receipt (FR-PR-02) and the Surat
        Jalan can be raised live. The whole chain signs off every department's
