@@ -880,7 +880,19 @@ window.ViewsMaster = (function () {
      Bulk formula parameters on the 100% ratio basis: kategori, customer,
      urutan, BJ, pH range, viscosity and the four stability tests. The recipe
      percentages themselves live on the production BOM's FORMULA lines. */
-  var formulaFilter = { q: "" };
+  var formulaFilter = { q: "", kat: "", stab: "", page: 1, rpp: 10, open: null };
+  var FFS_CATS = ["Lip Makeup", "Face Makeup", "Eye Makeup", "Skincare", "Cleansers & Makeup Removers", "Sun Care", "Body Care", "Hair Care"];
+  var FFS_STAB = { "Pass": { cls: "pass", word: "PASS" }, "Running": { cls: "run", word: "RUNNING" }, "Fail": { cls: "fail", word: "FAIL" }, "-": { cls: "none", word: "NOT SET" } };
+  var FFS_TESTS = [["stabTk", "TK", "Thermal cycle"], ["stabTkul", "TKUL", "UV cycle"], ["stabT50", "T50", "50\u00b0C oven"], ["stabTm", "TM", "Real-time"]];
+  var FFS_HUES = ["#4a7fc1", "#5fb3a1", "#9b7bc0", "#e2603f", "#dfb54c", "#7fa05a", "#c0788f", "#8a8a8c"];
+
+  function ffsEsc(s) { return Engine.esc(s); }
+  function ffsPct(n) { return (Math.round(n * 100) / 100).toFixed(2).replace(/\.?0+$/, "") + "%"; }
+  function ffsMatName(code) {
+    var db = Store.get();
+    var m = (db.materials || []).filter(function (x) { return x.code === code; })[0];
+    return m ? m.name : code;
+  }
 
   function formulas(root) {
     var db = Store.get();
@@ -893,57 +905,184 @@ window.ViewsMaster = (function () {
     root.appendChild(UI.pageHead("Master Formula (FFS)",
       "Bulk formula parameters (form FR-RD-09): specific gravity, pH range, viscosity and the TK / TKUL / T50 / TM stability tests. Maintained by RND Formula; the recipe percentages are entered on each production BOM.",
       headBtns));
-    var search = UI.input({ placeholder: "Search formula code / kategori / viscosity...", value: formulaFilter.q });
-    search.addEventListener("input", function () { formulaFilter.q = search.value; draw(); });
-    var bodyWrap = UI.el("div");
-    function draw() {
-      UI.clear(bodyWrap);
+
+    var wrap = UI.el("div", { class: "ffs-page" });
+    root.appendChild(wrap);
+
+    function ffsFiltered() {
       var q = formulaFilter.q.toLowerCase();
-      var rows = db.formulas.filter(function (f) {
-        if (!q) return true;
-        return (f.id + " " + (f.kategori || "") + " " + (f.productName || "") + " " + (f.variant || "") + " " + (f.viscosity || "") + " " + customerName(f.customerId)).toLowerCase().indexOf(q) >= 0;
+      return db.formulas.filter(function (f) {
+        if (formulaFilter.kat && (f.kategori || "") !== formulaFilter.kat) return false;
+        if (q && (f.id + " " + (f.kategori || "") + " " + customerName(f.customerId) + " " + (f.productName || "") + " " + (f.variant || "")).toLowerCase().indexOf(q) < 0) return false;
+        if (formulaFilter.stab) {
+          var v = [f.stabTk, f.stabTkul, f.stabT50, f.stabTm];
+          if (formulaFilter.stab === "fail" && v.indexOf("Fail") < 0) return false;
+          if (formulaFilter.stab === "run" && v.indexOf("Running") < 0) return false;
+          if (formulaFilter.stab === "pass" && v.some(function (x) { return x !== "Pass"; })) return false;
+          if (formulaFilter.stab === "open" && v.indexOf("-") < 0) return false;
+        }
+        return true;
       }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
-      var cols = [
-        { label: "Formula Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
-        { label: "Kategori", render: function (r) { return Engine.esc(r.kategori || "-"); } },
-        { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
-        { label: "Product Name", render: function (r) { return Engine.esc(r.productName || "-"); } },
-        { label: "Variant", render: function (r) { return Engine.esc(r.variant || "-"); } },
-        { label: "BJ", cls: "num", render: function (r) { return Engine.fmtNum(r.bj); } },
-        { label: "pH", cls: "num", render: function (r) {
-          var a = r.phMin === "" || r.phMin == null ? "" : r.phMin;
-          var b = r.phMax === "" || r.phMax == null ? "" : r.phMax;
-          return (a === "" && b === "") ? "<span class='row-muted'>-</span>" : Engine.esc(a + (b !== "" && b !== a ? " - " + b : ""));
-        } },
-        { label: "Viscosity", render: function (r) { return Engine.esc(r.viscosity || "-"); } },
-        { label: "Lines", cls: "num", render: function (r) {
-          var n = compLines("FORMULA", "formulaId", r.id).length;
-          return n ? "<b>" + n + "</b>" : "<span class='row-muted'>0</span>";
-        } },
-        { label: "Stability (TK / TKUL / T50 / TM)", render: function (r) {
-          return UI.el("div", { class: "btn-row", style: "gap:3px" }, [stabTag(r.stabTk), stabTag(r.stabTkul), stabTag(r.stabT50), stabTag(r.stabTm)]);
-        } },
-        { label: "", render: function (r) {
-          if (!canEdit) return "";
-          return UI.el("div", { class: "btn-row" }, [
-            UI.btn("Edit", function () { formulaEditor(r); }, "btn-sm"),
-            UI.btn("Delete", function () {
-              UI.confirmDialog("Delete formula " + r.id + "? BOMs referencing it keep a dangling link.", function () {
-                Store.deleteFormula(r.id); App.refresh();
-              });
-            }, "btn-danger btn-sm")
-          ]);
-        } }
-      ];
-      bodyWrap.appendChild(UI.table(cols, rows, { emptyText: "No formula yet. Create the first one." }));
     }
-    var card = UI.el("section", { class: "card" });
-    card.appendChild(UI.el("div", { class: "toolbar" }, [search, UI.el("div", { class: "spacer" }),
-      UI.el("span", { class: "hint", style: "font-size:11.5px;color:var(--muted)", text: db.formulas.length + " formulas" })]));
-    card.appendChild(UI.el("div", { class: "card-body tight" }, [bodyWrap]));
-    root.appendChild(card);
-    draw();
-    if (!canEdit) root.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
+
+    function ffsLamps(f) {
+      return FFS_TESTS.map(function (t) {
+        var s = FFS_STAB[f[t[0]]] || FFS_STAB["-"];
+        return '<td class="ffs-lamps"><span class="ffs-lamp ' + s.cls + '" title="' + t[1] + ': ' + s.word + '"></span></td>';
+      }).join("");
+    }
+
+    function ffsPanel(f) {
+      var lines = (f.lines || []).map(function (ln) { return [ffsMatName(ln.materialCode), Number(ln.pct) || 0]; });
+      var total = lines.reduce(function (a, l) { return a + l[1]; }, 0);
+      var hueOf = function (l, i) { return l[0] === "Others" ? "#8a8a8c" : FFS_HUES[i % FFS_HUES.length]; };
+      var bar = lines.map(function (l, i) {
+        var hue = hueOf(l, i);
+        var txt = l[1] >= 3 ? ffsPct(l[1]) : "";
+        return '<i class="' + (l[0] === "Others" ? "txt-dark" : "") + '" style="width:' + l[1] + '%;background:' + hue + '" title="' + ffsEsc(l[0]) + ' ' + ffsPct(l[1]) + '">' + txt + '</i>';
+      }).join("");
+      var legend = lines.map(function (l, i) {
+        return '<li><i style="background:' + hueOf(l, i) + '"></i>' + ffsEsc(l[0]) + '<b>' + ffsPct(l[1]) + '</b></li>';
+      }).join("");
+      var nodes = FFS_TESTS.map(function (t, i) {
+        var s = FFS_STAB[f[t[0]]] || FFS_STAB["-"];
+        return '<div class="ffs-tnode ' + s.cls + '"><span class="dot">' + (i + 1) + '</span><b>' + t[1] + '</b><small>' + t[2] + '</small><em>' + s.word + '</em></div>';
+      }).join("");
+      var actions = "";
+      if (canEdit) {
+        actions = '<div class="ffs-actions"><button class="btn btn-sm" data-act="edit" data-id="' + ffsEsc(f.id) + '">Edit</button>' +
+          '<button class="btn btn-danger btn-sm" data-act="del" data-id="' + ffsEsc(f.id) + '">Delete</button></div>';
+      }
+      return '<div class="ffs-panel-wrap"><div class="ffs-panel-clip"><div class="ffs-panel">' +
+        '<div><h3>Composition (w/w%)</h3>' + (lines.length ? '<div class="ffs-bar">' + bar + '</div><ul class="ffs-legend">' + legend + '</ul><div class="ffs-total"><span>Total</span><b>' + ffsPct(total) + '</b></div>' : '<p style="color:var(--muted);font-size:12px">No composition lines yet.</p>') + '</div>' +
+        '<div><h3>Stability Tests</h3><div class="ffs-timeline">' + nodes + '</div></div>' +
+        (f.note ? '<p class="ffs-pnotes"><b>Notes:</b> ' + ffsEsc(f.note) + '</p>' : "") +
+        actions + '</div></div></div>';
+    }
+
+    function ffsRow(f) {
+      var open = formulaFilter.open === f.id;
+      var ph = (f.phMin === "" || f.phMin == null) && (f.phMax === "" || f.phMax == null) ? "-" :
+        ffsEsc(String(f.phMin) + (f.phMax !== "" && f.phMax != null && f.phMax !== f.phMin ? " \u2013 " + f.phMax : ""));
+      var n = (f.lines || []).length;
+      return '<tr class="ffs-row' + (open ? " open" : "") + '" data-id="' + ffsEsc(f.id) + '" tabindex="0" aria-expanded="' + open + '">' +
+        '<td class="ffs-code"><span class="ffs-mono">' + ffsEsc(f.id) + '</span></td>' +
+        '<td class="ffs-kat"><span>' + ffsEsc(f.kategori || "-") + '</span></td>' +
+        '<td class="ffs-cust">' + ffsEsc(customerName(f.customerId) || "-") + '</td>' +
+        '<td class="ffs-prod"><b>' + ffsEsc(f.productName || "-") + '</b><span>(' + ffsEsc(f.variant || "-") + ')</span></td>' +
+        '<td class="ffs-num">' + Engine.fmtNum(f.bj) + '</td>' +
+        '<td class="ffs-num">' + ph + '</td>' +
+        '<td class="ffs-num">' + ffsEsc(f.viscosity || "-") + '</td>' +
+        '<td class="ffs-num">' + (n || '<span style="color:var(--faint)">0</span>') + '</td>' +
+        ffsLamps(f) +
+        '<td class="ffs-expc"><button class="ffs-btn-exp" type="button" aria-label="Toggle details for ' + ffsEsc(f.id) + '"><svg width="16" height="16" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></td></tr>' +
+        '<tr class="ffs-expander' + (open ? " open" : "") + '" data-for="' + ffsEsc(f.id) + '"><td colspan="13">' + ffsPanel(f) + '</td></tr>';
+    }
+
+    function ffsPagerHtml(pages) {
+      function btn(label, page, dis, cur) {
+        return '<button class="ffs-pg" type="button" data-page="' + page + '"' + (dis ? " disabled" : "") + (cur ? ' aria-current="page"' : "") + '>' + label + '</button>';
+      }
+      var chev = function (d) { return '<svg width="14" height="14" viewBox="0 0 24 24"><path d="' + d + '"/></svg>'; };
+      var h = btn(chev("m14 17-5-5 5-5"), formulaFilter.page - 1, formulaFilter.page === 1, false);
+      var list = [];
+      for (var p = 1; p <= pages; p++) {
+        if (pages <= 6 || p === 1 || p === pages || Math.abs(p - formulaFilter.page) <= 1) list.push(p);
+        else if (list[list.length - 1] !== "\u2026") list.push("\u2026");
+      }
+      list.forEach(function (p) {
+        h += p === "\u2026" ? '<span class="ffs-pg dots">\u2026</span>' : btn(p, p, false, p === formulaFilter.page);
+      });
+      h += btn(chev("m10 17 5-5-5-5"), formulaFilter.page + 1, formulaFilter.page === pages, false);
+      return h;
+    }
+
+    function ffsRender() {
+      var list = ffsFiltered();
+      var pages = Math.max(1, Math.ceil(list.length / formulaFilter.rpp));
+      if (formulaFilter.page > pages) formulaFilter.page = pages;
+      var slice = list.slice((formulaFilter.page - 1) * formulaFilter.rpp, formulaFilter.page * formulaFilter.rpp);
+      var pill = wrap.querySelector(".ffs-count");
+      if (pill) pill.innerHTML = "<b>" + list.length + "</b> / " + db.formulas.length + " formulas";
+      var showing = wrap.querySelector(".ffs-showing");
+      if (showing) showing.textContent = list.length ? "Showing " + ((formulaFilter.page - 1) * formulaFilter.rpp + 1) + "\u2013" + Math.min(formulaFilter.page * formulaFilter.rpp, list.length) + " of " + list.length : "No formulas to show";
+      var pager = wrap.querySelector(".ffs-pager");
+      if (pager) pager.innerHTML = ffsPagerHtml(pages);
+      var empty = wrap.querySelector(".ffs-empty");
+      if (empty) empty.hidden = list.length > 0;
+      var tbody = wrap.querySelector("tbody");
+      if (tbody) tbody.innerHTML = slice.map(ffsRow).join("");
+    }
+
+    var catOpts = '<option value="">Kategori: all</option>' + FFS_CATS.map(function (c) { return '<option value="' + ffsEsc(c) + '">' + ffsEsc(c) + '</option>'; }).join("");
+    var stabOpts = '<option value="">Stability: all</option><option value="fail">Has Fail</option><option value="run">Has Running</option><option value="pass">All Pass</option><option value="open">Not complete</option>';
+    var chevSvg = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+    wrap.innerHTML =
+      '<div class="ffs-toolbar">' +
+        '<span class="ffs-search"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search formula code / customer / product\u2026" aria-label="Search formulas"></span>' +
+        '<span class="ffs-sel"><select aria-label="Filter by kategori">' + catOpts + '</select>' + chevSvg + '</span>' +
+        '<span class="ffs-sel"><select aria-label="Filter by stability">' + stabOpts + '</select>' + chevSvg + '</span>' +
+        '<span class="ffs-count"></span>' +
+      '</div>' +
+      '<section class="ffs-sheet"><div class="ffs-scroll"><table class="ffs"><thead>' +
+        '<tr><th class="ffs-col ffs-span2" rowspan="2">Formula Code</th><th class="ffs-grp" colspan="3">Identity</th><th class="ffs-grp" colspan="4">Technical</th><th class="ffs-grp" colspan="4">Stability</th><th class="ffs-span2" rowspan="2"></th></tr>' +
+        '<tr><th class="ffs-col">Kategori</th><th class="ffs-col">Customer</th><th class="ffs-col">Product <small>(variant)</small></th><th class="ffs-col">BJ <small>(g/mL)</small></th><th class="ffs-col">pH <small>(25\u00b0C)</small></th><th class="ffs-col">Viscosity <small>(cP)</small></th><th class="ffs-col">Lines</th><th class="ffs-col">TK</th><th class="ffs-col">TKUL</th><th class="ffs-col">T50</th><th class="ffs-col">TM</th></tr>' +
+      '</thead><tbody></tbody></table></div>' +
+      '<div class="ffs-empty" hidden><svg width="44" height="44" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.3L4.8 18a2.4 2.4 0 0 0 2.1 3.5h10.2a2.4 2.4 0 0 0 2.1-3.5L14 9.3V3M7.5 15h9"/></svg><h2>No formulas match</h2><p>Adjust the search or filters to see the master list again.</p><button class="btn btn-sm ffs-clear" type="button">Clear search &amp; filters</button></div>' +
+      '<footer class="ffs-foot"><span class="ffs-showing"></span><nav class="ffs-pager" aria-label="Pagination"></nav><label class="ffs-rpp">Rows <span class="ffs-sel"><select><option>10</option><option>25</option><option>50</option></select>' + chevSvg + '</span></label></footer>' +
+      '</section>';
+
+    var searchInput = wrap.querySelector(".ffs-search input");
+    var katSel = wrap.querySelector('[aria-label="Filter by kategori"]');
+    var stabSel = wrap.querySelector('[aria-label="Filter by stability"]');
+    var rppSel = wrap.querySelector(".ffs-rpp select");
+    searchInput.value = formulaFilter.q;
+    katSel.value = formulaFilter.kat;
+    stabSel.value = formulaFilter.stab;
+    rppSel.value = String(formulaFilter.rpp);
+
+    searchInput.addEventListener("input", function () { formulaFilter.q = this.value.trim(); formulaFilter.page = 1; ffsRender(); });
+    katSel.addEventListener("change", function () { formulaFilter.kat = this.value; formulaFilter.page = 1; ffsRender(); });
+    stabSel.addEventListener("change", function () { formulaFilter.stab = this.value; formulaFilter.page = 1; ffsRender(); });
+    rppSel.addEventListener("change", function () { formulaFilter.rpp = +this.value; formulaFilter.page = 1; ffsRender(); });
+    wrap.querySelector(".ffs-clear").addEventListener("click", function () {
+      formulaFilter.q = ""; formulaFilter.kat = ""; formulaFilter.stab = ""; formulaFilter.page = 1;
+      searchInput.value = ""; katSel.value = ""; stabSel.value = "";
+      ffsRender();
+    });
+    wrap.querySelector(".ffs-pager").addEventListener("click", function (e) {
+      var b = e.target.closest("button.ffs-pg");
+      if (!b || b.disabled) return;
+      formulaFilter.page = +b.getAttribute("data-page");
+      ffsRender();
+    });
+    wrap.querySelector("tbody").addEventListener("click", function (e) {
+      var actBtn = e.target.closest("[data-act]");
+      if (actBtn) {
+        var id = actBtn.getAttribute("data-id");
+        var rec = db.formulas.filter(function (f) { return f.id === id; })[0];
+        if (actBtn.getAttribute("data-act") === "edit" && rec) formulaEditor(rec);
+        if (actBtn.getAttribute("data-act") === "del" && rec) {
+          UI.confirmDialog("Delete formula " + id + "? BOMs referencing it keep a dangling link.", function () { Store.deleteFormula(id); App.refresh(); });
+        }
+        return;
+      }
+      var r = e.target.closest("tr.ffs-row");
+      if (r) {
+        var rid = r.getAttribute("data-id");
+        formulaFilter.open = formulaFilter.open === rid ? null : rid;
+        ffsRender();
+      }
+    });
+    wrap.querySelector("tbody").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var r = e.target.closest("tr.ffs-row");
+      if (r) { e.preventDefault(); var rid = r.getAttribute("data-id"); formulaFilter.open = formulaFilter.open === rid ? null : rid; ffsRender(); }
+    });
+
+    ffsRender();
+    if (!canEdit) wrap.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
       text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the formula master is maintained by RND Formula." }));
   }
 
