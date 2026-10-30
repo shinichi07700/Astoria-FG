@@ -254,6 +254,7 @@ window.App = (function () {
         btn.disabled = false;
       });
     }, "btn-primary");
+    var gslot = UI.el("div", {});
     wrap.appendChild(UI.el("div", { class: "login-card" }, [
       loginLogo(),
       UI.el("div", { class: "login-title", text: "Staff sign in" }),
@@ -265,6 +266,7 @@ window.App = (function () {
       UI.field("Password", iPass),
       err,
       btn,
+      gslot,
       UI.el("div", { class: "login-alt" }, [
         UI.el("a", {
           href: "#", class: "login-forgot", text: "Forgot your password?",
@@ -273,6 +275,32 @@ window.App = (function () {
       ])
     ]));
     iPass.addEventListener("keydown", function (e) { if (e.key === "Enter") btn.click(); });
+    /* A cancelled or failed Google redirect lands back on this card carrying
+       the reason; show it once rather than leaving a silent login form. */
+    var oerr = window.SB && SB.oauthError ? SB.oauthError() : null;
+    if (oerr) err.textContent = oerr;
+    /* Offer Google only when the project has the provider enabled - a button
+       that dead-ends on GoTrue's "provider is not enabled" page is worse than
+       no button, and this doubles as the check that dashboard setup landed. */
+    if (window.SB && SB.providers) {
+      SB.providers().then(function (p) {
+        if (!p || !p.google) return;
+        var gbtn = UI.btn("Continue with Google", function () {
+          gbtn.disabled = true;
+          err.textContent = "";
+          /* origin + pathname only: a query string or hash riding along would
+             stop the target matching the project's Redirect URLs allow-list. */
+          SB.startGoogle(window.location.origin + window.location.pathname).then(function (url) {
+            window.location.assign(url);
+          }).catch(function (e) {
+            err.textContent = (e && e.message) || "Could not start Google sign-in";
+            gbtn.disabled = false;
+          });
+        }, "btn-google");
+        gslot.appendChild(UI.el("div", { class: "login-or", text: "or" }));
+        gslot.appendChild(gbtn);
+      });
+    }
   }
 
   function recoveryCard(wrap) {

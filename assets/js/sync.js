@@ -59,6 +59,7 @@ window.Sync = (function () {
   var has010 = false;
   var has011 = false;
   var has012 = false;
+  var has016 = false;
 
   /* Migration 009 adds m_supplier.category. Until it runs the column is
      absent, so the first upsert carrying it fails; the flag then drops the
@@ -85,7 +86,8 @@ window.Sync = (function () {
     return Promise.all([
       probe("materials", "supplier_links", function (ok) { if (ok) has010 = true; }),
       probe("m_formula", "lines", function (ok) { if (ok) has011 = true; }),
-      probe("m_packaging", "volume_ml", function (ok) { has012 = ok; })
+      probe("m_packaging", "volume_ml", function (ok) { has012 = ok; }),
+      probe("m_formula", "product_name", function (ok) { if (ok) has016 = true; })
     ]);
   }
 
@@ -186,6 +188,7 @@ window.Sync = (function () {
       note: f.note || ""
     };
     if (has011) { row.lines = f.lines || []; }
+    if (has016) { row.product_name = f.productName || ""; row.variant = f.variant || ""; }
     return row;
   }
   function formulaFrom(r) {
@@ -194,6 +197,7 @@ window.Sync = (function () {
       id: r.id, kategori: r.kategori, customerId: r.customer_id || "", urutan: Number(r.urutan) || 0,
       bj: Number(r.bj) || 1, phMin: r.ph_min == null ? "" : Number(r.ph_min), phMax: r.ph_max == null ? "" : Number(r.ph_max),
       viscosity: r.viscosity, stabTk: r.stab_tk, stabTkul: r.stab_tkul, stabT50: r.stab_t50, stabTm: r.stab_tm,
+      productName: r.product_name || "", variant: r.variant || "",
       note: r.note, lines: r.lines || []
     };
   }
@@ -900,14 +904,22 @@ window.Sync = (function () {
     loadPending();
     if (!enabled()) { setStatus("local"); cb("local"); return; }
     SB.init(window.ASTORIA_SUPABASE.url, window.ASTORIA_SUPABASE.anonKey);
-    if (!SB.restore()) { setStatus("login"); cb("login"); return; }
-    localSnapshot = JSON.parse(JSON.stringify(Store.get()));
-    localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials || []).length;
-    /* A password-recovery link adopts a session whose hash carried no uid/email;
-       resolve that identity before bootFromCloud reads the profile. No-op for a
-       normal restored session. */
-    var ready = SB.resolveRecovery ? SB.resolveRecovery() : Promise.resolve();
-    ready.then(function () { bootFromCloud(cb); });
+    /* A Google sign-in arrives as a redirect carrying a single-use code. Spend
+       it BEFORE restore() decides nobody is signed in, or the user is bounced
+       back to the login screen mid-flow. resolveOAuth never rejects: a failed
+       or cancelled sign-in resolves with no session and the login card reads
+       the reason from SB.oauthError(). */
+    var oauth = SB.resolveOAuth ? SB.resolveOAuth() : Promise.resolve();
+    oauth.then(function () {
+      if (!SB.restore()) { setStatus("login"); cb("login"); return; }
+      localSnapshot = JSON.parse(JSON.stringify(Store.get()));
+      localRowsBefore = (Store.get().fgs.length || 0) + (Store.get().materials || []).length;
+      /* A password-recovery link adopts a session whose hash carried no uid/email;
+         resolve that identity before bootFromCloud reads the profile. No-op for a
+         normal restored session. */
+      var ready = SB.resolveRecovery ? SB.resolveRecovery() : Promise.resolve();
+      ready.then(function () { bootFromCloud(cb); });
+    });
   }
   function bootFromCloud(cb) {
     ensureProfile()

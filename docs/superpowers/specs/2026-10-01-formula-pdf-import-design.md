@@ -20,9 +20,11 @@ R&D formula source documents (docx/doc) are converted to digital PDF by the clie
 
 ## Field set (provisional)
 
-Mirrors the current `m_formula` shape: `ffs`, `kategori`, `customer`, `bj`, `phMin`, `phMax`, `viscosity`, `stabTk`, `stabTkul`, `stabT50`, `stabTm`, `note`, `lines[{materialName, materialCode, pct, note}]`.
+The OCR captures the product identity and composition only. Physical parameters (BJ, pH, viscosity, stability tests) are filled from a separate form and are NOT extracted from the PDF.
 
-To be finalized with the RND Formula team on 2026-10-01. The contract is tolerant so field changes are cheap:
+Captured fields: `ffs`, `customer`, `kategori`, `productName`, `variant`, `note`, `lines[{materialName, materialCode, pct, note}]`.
+
+The contract is tolerant so field changes are cheap:
 
 - Unknown keys in the response are ignored by the app.
 - Missing / unreadable keys become `null` (or `""`) plus a `warnings[]` entry — never invented values.
@@ -63,25 +65,19 @@ Success response (HTTP 200):
 ```json
 {
   "ok": true,
-  "document": { "fileName": "MR03-BN-01.pdf", "pages": 2, "parser": "text" },
+  "document": { "fileName": "MR03-BN-01.pdf", "pages": 2, "parser": "openai" },
   "formula": {
     "ffs": "MR03-BN-01",
-    "kategori": "Cream",
     "customer": "Bening Naturals",
-    "bj": 1.02,
-    "phMin": 5.2,
-    "phMax": 5.8,
-    "viscosity": "20000 - 30000 cP",
-    "stabTk": "Pass",
-    "stabTkul": "Pass",
-    "stabT50": "Running",
-    "stabTm": "-",
+    "kategori": "Cream",
+    "productName": "Foundation Cream",
+    "variant": "Natural Beige",
     "note": "",
     "lines": [
       { "materialName": "Aqua", "materialCode": "", "pct": 62.5, "note": "" }
     ]
   },
-  "warnings": ["BJ not found in document - please fill in"]
+  "warnings": ["Material 'Titanium Dioxide' (line 4) not found in master"]
 }
 ```
 
@@ -97,9 +93,10 @@ A document with multiple formula tables: the workflow parses the primary table a
 
 - `ffs`: trimmed. If it already exists in `db.formulas`, the editor opens on the existing record (edit mode) with a prominent amber banner: "Formula X already exists - saving will overwrite its parameters and composition." Changing the code in the editor creates a new record instead.
 - `customer`: exact case-insensitive match on `m_customer` names → normalized match → blank + warning.
+- `productName`, `variant`: trimmed, stored as-is.
 - `lines[].materialCode`: exact code → exact name (case-insensitive) → normalized name → blank + per-line warning (user picks from the existing dropdown, already filtered to RM-INT / RM-EXT / PREMIX / RM).
-- Stability values: matched case-insensitively against the existing enum `- / Running / Pass / Fail`; unrecognized → `-` + warning.
 - `pct`: coerced to number; line order preserved; lines with no name dropped.
+- Physical parameters (BJ, pH, viscosity, stability tests) are NOT captured from the PDF — they remain at their default values in the editor for manual entry from a separate form.
 - On save of an imported draft, an extra `IMPORT` audit row is written (same precedent as the Master F/G CSV import), naming the source file.
 
 ## UX

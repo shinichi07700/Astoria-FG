@@ -65,9 +65,10 @@ window.OCRImport = (function () {
       id: String(f.ffs == null ? "" : f.ffs).trim(),
       kategori: String(f.kategori == null ? "" : f.kategori).trim(),
       customerId: "", urutan: 0,
-      bj: num(f.bj), phMin: num(f.phMin), phMax: num(f.phMax),
-      viscosity: String(f.viscosity == null ? "" : f.viscosity).trim(),
-      stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
+      bj: 1, phMin: "", phMax: "",
+      viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
+      productName: String(f.productName == null ? "" : f.productName).trim(),
+      variant: String(f.variant == null ? "" : f.variant).trim(),
       note: String(f.note == null ? "" : f.note).trim(),
       lines: []
     };
@@ -78,14 +79,6 @@ window.OCRImport = (function () {
       warnings.push(rawCust ? "Customer '" + rawCust + "' not found in master - pick it manually"
                             : "Customer not found in the document - pick it manually");
     }
-    [["stabTk", f.stabTk], ["stabTkul", f.stabTkul], ["stabT50", f.stabT50], ["stabTm", f.stabTm]]
-      .forEach(function (p) {
-        var raw = String(p[1] == null ? "" : p[1]).trim();
-        draft[p[0]] = stab(raw);
-        if (draft[p[0]] === "-" && raw && raw !== "-") {
-          warnings.push("Stability " + p[0].slice(4).toUpperCase() + ": unrecognized value '" + raw + "' - set to '-'");
-        }
-      });
     var inLines = Array.isArray(f.lines) ? f.lines : [];
     inLines.forEach(function (ln, i) {
       ln = ln || {};

@@ -901,12 +901,14 @@ window.ViewsMaster = (function () {
       var q = formulaFilter.q.toLowerCase();
       var rows = db.formulas.filter(function (f) {
         if (!q) return true;
-        return (f.id + " " + (f.kategori || "") + " " + (f.viscosity || "") + " " + customerName(f.customerId)).toLowerCase().indexOf(q) >= 0;
+        return (f.id + " " + (f.kategori || "") + " " + (f.productName || "") + " " + (f.variant || "") + " " + (f.viscosity || "") + " " + customerName(f.customerId)).toLowerCase().indexOf(q) >= 0;
       }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
       var cols = [
         { label: "FFS Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
         { label: "Kategori", render: function (r) { return Engine.esc(r.kategori || "-"); } },
         { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
+        { label: "Product Name", render: function (r) { return Engine.esc(r.productName || "-"); } },
+        { label: "Variant", render: function (r) { return Engine.esc(r.variant || "-"); } },
         { label: "BJ", cls: "num", render: function (r) { return Engine.fmtNum(r.bj); } },
         { label: "pH", cls: "num", render: function (r) {
           var a = r.phMin === "" || r.phMin == null ? "" : r.phMin;
@@ -1008,7 +1010,8 @@ window.ViewsMaster = (function () {
     opts = opts || {};
     var isNew = !rec;
     var d = Object.assign({ id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "",
-      viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-", note: "", lines: [] }, rec || {});
+      viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
+      productName: "", variant: "", note: "", lines: [] }, rec || {});
     if (!d.lines) d.lines = [];
     if (opts.importData) {
       Object.keys(opts.importData).forEach(function (k) {
@@ -1019,6 +1022,8 @@ window.ViewsMaster = (function () {
     var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Urutan]" });
     var iKat = UI.input({ value: d.kategori, placeholder: "e.g. Cream, Lotion, Serum" });
     var iCust = customerCombo(d.customerId);
+    var iProductName = UI.input({ value: d.productName || "", placeholder: "e.g. Foundation Cream" });
+    var iVariant = UI.input({ value: d.variant || "", placeholder: "e.g. Natural Beige" });
     var iUrutan = UI.input({ type: "number", step: "1", min: "0", value: String(d.urutan || 0) });
     var iBj = UI.input({ type: "number", step: "0.0001", min: "0", value: String(d.bj == null ? 1 : d.bj) });
     var iPhMin = UI.input({ type: "number", step: "0.01", value: (d.phMin === "" || d.phMin == null) ? "" : String(d.phMin) });
@@ -1102,6 +1107,8 @@ window.ViewsMaster = (function () {
         UI.field("FFS Code", iCode, "Formula code, e.g. MR03-BN-01"),
         UI.field("Kategori", iKat),
         UI.field("Customer", iCust),
+        UI.field("Product Name", iProductName),
+        UI.field("Variant", iVariant),
         UI.field("Urutan", iUrutan),
         UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss)."),
         UI.field("Viscosity", iVisc)
@@ -1126,6 +1133,7 @@ window.ViewsMaster = (function () {
       actions: [{
         label: "Save Formula", cls: "btn-primary", onClick: function () {
           d.id = iCode.value.trim(); d.kategori = iKat.value.trim(); d.customerId = iCust.value || "";
+          d.productName = iProductName.value.trim(); d.variant = iVariant.value.trim();
           d.urutan = Number(iUrutan.value) || 0; d.bj = Number(iBj.value) || 0;
           d.phMin = iPhMin.value === "" ? null : Number(iPhMin.value);
           d.phMax = iPhMax.value === "" ? null : Number(iPhMax.value);

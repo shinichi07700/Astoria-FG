@@ -15,6 +15,6 @@ window.ASTORIA_SUPABASE = {
    When either value is empty the "Import from PDF" button stays hidden.
    The token is client-visible by design (internal tool; rotate if leaked). */
 window.ASTORIA_OCR = {
-  webhookUrl: "",   /* e.g. https://<n8n-host>/webhook/astoria/formula-ocr */
-  token: ""         /* X-Astoria-Token Header Auth value */
+  webhookUrl: "https://n8n-bdghopjw19dv.eu1.sumopod.my.id/webhook/astoria/formula-ocr",   /* e.g. https://<n8n-host>/webhook/astoria/formula-ocr */
+  token: "1234567890"         /* X-Astoria-Token Header Auth value */
 };

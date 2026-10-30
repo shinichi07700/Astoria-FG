@@ -141,6 +141,72 @@ window.SB = (function () {
     return authPost("recover", { email: email, redirectTo: redirectTo });
   }
 
+  /* ---------- Google sign-in (Authorization Code + PKCE) ---------- */
+  /* The verifier survives exactly one redirect hop: it is written when the
+     browser leaves for Google and spent the moment the code comes back. The
+     code itself is worthless without it, which is what makes OAuth safe for
+     a static site holding only the anon key. */
+  var VKEY = "astoria_pkce_verifier";
+  var oauthErr = null;
+
+  /* Resolves the authorize URL; the CALLER navigates, so nothing here touches
+     window.location and the URL can be inspected before the redirect. */
+  function startGoogle(redirectTo) {
+    if (!enabled()) return Promise.reject(new Error("Cloud sign-in is not configured"));
+    var verifier;
+    try { verifier = OAuthPKCE.newVerifier(); } catch (e) { return Promise.reject(e); }
+    return OAuthPKCE.challenge(verifier).then(function (ch) {
+      try { sessionStorage.setItem(VKEY, verifier); } catch (e) {}
+      return OAuthPKCE.authorizeUrl(cfg.url, "google", ch, redirectTo);
+    });
+  }
+
+  /* Spend a code that arrived on the redirect. Never rejects - a failed or
+     cancelled Google sign-in must land on the login screen with a reason,
+     not leave boot() hanging. */
+  function resolveOAuth() {
+    var href = window.location.href;
+    var code = OAuthPKCE.extractCode(href);
+    var providerErr = OAuthPKCE.extractError(href);
+    if (!code && !providerErr) return Promise.resolve({ ok: false, error: null });
+    /* Drop the code from the address bar before anything can reload it: an
+       authorization code is single-use, and leaving it in history would only
+       produce a confusing invalid_grant on refresh. */
+    try { history.replaceState(null, "", window.location.pathname); } catch (e) {}
+    if (providerErr && !code) {
+      oauthErr = providerErr;
+      return Promise.resolve({ ok: false, error: providerErr });
+    }
+    var verifier = "";
+    try {
+      verifier = sessionStorage.getItem(VKEY) || "";
+      sessionStorage.removeItem(VKEY);
+    } catch (e) {}
+    if (!verifier) {
+      oauthErr = "That Google sign-in could not be finished in this tab - please start again.";
+      return Promise.resolve({ ok: false, error: oauthErr });
+    }
+    return authPost(OAuthPKCE.PKCE_PATH, OAuthPKCE.exchangeBody(code, verifier))
+      .then(function (j) { adopt(j); oauthErr = null; return { ok: true, error: null }; })
+      .catch(function (e) {
+        oauthErr = (e && e.message) || "Google sign-in failed";
+        return { ok: false, error: oauthErr };
+      });
+  }
+  /* Read-once: the login card shows the reason, and a later render does not
+     keep resurfacing a stale failure. */
+  function oauthError() { var m = oauthErr; oauthErr = null; return m; }
+
+  /* Which external providers this project has enabled. GoTrue publishes the
+     list on a public endpoint, so the login screen can avoid offering a
+     Google button that would only dead-end on "provider is not enabled".
+     An unreachable endpoint reads as "none" - password sign-in still works. */
+  function providers() {
+    return authRequest("GET", "settings", undefined, false).then(function (s) {
+      return (s && s.external) || {};
+    }).catch(function () { return {}; });
+  }
+
   /* ---------- PostgREST ---------- */
   function rest(method, path, body, extra) {
     return ensureToken().then(function () {
@@ -208,6 +274,8 @@ window.SB = (function () {
     signIn: signIn, signOut: signOut, ensureToken: ensureToken, updateUser: updateUser,
     requestRecovery: requestRecovery, resolveRecovery: resolveRecovery,
     inRecovery: inRecovery, clearRecovery: clearRecovery,
+    startGoogle: startGoogle, resolveOAuth: resolveOAuth, oauthError: oauthError,
+    providers: providers,
     selectAll: selectAll, hasColumn: hasColumn,
     upsert: upsert, patch: patch, insert: insert, remove: remove, rpc: rpc
   };

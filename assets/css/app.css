@@ -793,6 +793,14 @@ body.login-mode .topbar-right { display: none; }
 .login-err { min-height: 18px; color: var(--red); font-size: 12px; font-weight: 600; margin: 2px 0 6px; }
 .login-ok { color: var(--green); font-size: 12px; font-weight: 600; line-height: 1.5; margin: 2px 0 6px; }
 .login-alt { text-align: center; margin-top: 10px; }
+.login-or {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 0 10px; color: var(--muted);
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em;
+}
+.login-or::before, .login-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.login-card .btn-google { width: 100%; }
+.login-card .btn-google:hover { background: var(--accent-soft); border-color: var(--accent); }
 .login-forgot { color: var(--accent-dark); font-size: 12.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
 .login-forgot:hover { text-decoration: underline; }
 .login-card .btn { justify-content: center; padding: 10px; }

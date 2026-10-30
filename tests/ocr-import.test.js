@@ -70,14 +70,8 @@ var PAYLOAD = {
     ffs: " MR03-BN-01 ",
     kategori: "Cream",
     customer: "PT. ABC  Beauty",
-    bj: "1.02",
-    phMin: 5.2,
-    phMax: 5.8,
-    viscosity: "20000 - 30000 cP",
-    stabTk: "pass",
-    stabTkul: "Pass",
-    stabT50: "Running",
-    stabTm: "n/a",
+    productName: " Foundation Cream ",
+    variant: " Natural Beige ",
     note: "mix at 60C",
     density: 0.99,                        /* unknown key - must be ignored */
     lines: [
@@ -87,19 +81,20 @@ var PAYLOAD = {
       { materialName: "Xanthan Gum", materialCode: "RM-1002", pct: 5, note: "" }
     ]
   },
-  warnings: ["BJ guessed from table"]
+  warnings: ["n8n warning about something"]
 };
 var R = O.mapToFormulaDraft(PAYLOAD, DB);
 
 eq("map ffs trimmed", R.draft.id, "MR03-BN-01");
 eq("map kategori", R.draft.kategori, "Cream");
 eq("map customer resolved", R.draft.customerId, "C-001");
-eq("map bj numeric", R.draft.bj, 1.02);
-eq("map phMin", R.draft.phMin, 5.2);
-eq("map viscosity", R.draft.viscosity, "20000 - 30000 cP");
-eq("map stabTk case-folded", R.draft.stabTk, "Pass");
-eq("map stabTm clamped", R.draft.stabTm, "-");
+eq("map productName trimmed", R.draft.productName, "Foundation Cream");
+eq("map variant trimmed", R.draft.variant, "Natural Beige");
 eq("map note", R.draft.note, "mix at 60C");
+eq("map bj default", R.draft.bj, 1);
+eq("map phMin default", R.draft.phMin, "");
+eq("map viscosity default", R.draft.viscosity, "");
+eq("map stabTk default", R.draft.stabTk, "-");
 eq("map line count (nameless dropped)", R.draft.lines.length, 3);
 eq("map line1 code", R.draft.lines[0].materialCode, "RM-1001");
 eq("map line1 pct", R.draft.lines[0].pct, 62.5);
@@ -108,19 +103,20 @@ eq("map line2 note keeps source + tag", R.draft.lines[1].note, "from supplier X 
 eq("map line3 is Xanthan", R.draft.lines[2].materialCode, "RM-1002");
 count++;
 var sig = R.warnings.filter(function (w) { return w.indexOf("sum to 105.000") >= 0; })[0];
-var tmW = R.warnings.filter(function (w) { return w.indexOf("Stability TM") >= 0; })[0];
 var matW = R.warnings.filter(function (w) { return w.indexOf("Mystery Powder") >= 0; })[0];
 var custW = R.warnings.filter(function (w) { return w.indexOf("Customer") >= 0; })[0];
-if (!sig || !tmW || !matW) { fails++; console.log("FAIL map warnings expected sigma+stabTM+material, got=" + JSON.stringify(R.warnings)); }
-else console.log("PASS map warnings sigma+stabTM+material");
+if (!sig || !matW) { fails++; console.log("FAIL map warnings expected sigma+material, got=" + JSON.stringify(R.warnings)); }
+else console.log("PASS map warnings sigma+material");
 eq("map ok payload has no customer warning", !!custW, false);
-eq("map passthrough n8n warning", R.warnings.indexOf("BJ guessed from table") >= 0, true);
+eq("map passthrough n8n warning", R.warnings.indexOf("n8n warning about something") >= 0, true);
 eq("map existing found", !!(R.existing && R.existing.id === "MR03-BN-01"), true);
 
 /* ---------- 5. missing-field payload ---------- */
 var R2 = O.mapToFormulaDraft({ ok: true, formula: { kategori: "Lotion" } }, DB);
 eq("missing ffs -> blank id", R2.draft.id, "");
-eq("missing bj -> null", R2.draft.bj, null);
+eq("missing productName -> blank", R2.draft.productName, "");
+eq("missing variant -> blank", R2.draft.variant, "");
+eq("missing bj -> default 1", R2.draft.bj, 1);
 eq("missing stabs -> dash", R2.draft.stabTk + R2.draft.stabTkul + R2.draft.stabT50 + R2.draft.stabTm, "----");
 eq("missing customer warning", R2.warnings.filter(function (w) { return w.indexOf("Customer not found in the document") >= 0; }).length, 1);
 eq("missing payload no existing", R2.existing, null);
