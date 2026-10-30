@@ -893,7 +893,7 @@ window.ViewsMaster = (function () {
     root.appendChild(UI.pageHead("Master Formula (FFS)",
       "Bulk formula parameters (form FR-RD-09): specific gravity, pH range, viscosity and the TK / TKUL / T50 / TM stability tests. Maintained by RND Formula; the recipe percentages are entered on each production BOM.",
       headBtns));
-    var search = UI.input({ placeholder: "Search FFS code / kategori / viscosity...", value: formulaFilter.q });
+    var search = UI.input({ placeholder: "Search formula code / kategori / viscosity...", value: formulaFilter.q });
     search.addEventListener("input", function () { formulaFilter.q = search.value; draw(); });
     var bodyWrap = UI.el("div");
     function draw() {
@@ -904,7 +904,7 @@ window.ViewsMaster = (function () {
         return (f.id + " " + (f.kategori || "") + " " + (f.productName || "") + " " + (f.variant || "") + " " + (f.viscosity || "") + " " + customerName(f.customerId)).toLowerCase().indexOf(q) >= 0;
       }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
       var cols = [
-        { label: "FFS Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
+        { label: "Formula Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
         { label: "Kategori", render: function (r) { return Engine.esc(r.kategori || "-"); } },
         { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
         { label: "Product Name", render: function (r) { return Engine.esc(r.productName || "-"); } },
@@ -1104,7 +1104,7 @@ window.ViewsMaster = (function () {
 
     var body = UI.el("div", {}, [
       UI.el("div", { class: "form-grid" }, [
-        UI.field("FFS Code", iCode, "Formula code, e.g. MR03-BN-01"),
+        UI.field("Formula Code", iCode, "Formula code, e.g. MR03-BN-01"),
         UI.field("Kategori", iKat),
         UI.field("Customer", iCust),
         UI.field("Product Name", iProductName),
@@ -1140,11 +1140,11 @@ window.ViewsMaster = (function () {
           d.viscosity = iVisc.value.trim();
           d.stabTk = iTk.value; d.stabTkul = iTkul.value; d.stabT50 = iT50.value; d.stabTm = iTm.value;
           d.note = iNote.value.trim();
-          if (!d.id) { UI.toast("FFS code is required", "err"); return; }
+          if (!d.id) { UI.toast("Formula code is required", "err"); return; }
           if (!(d.bj > 0)) { UI.toast("BJ must be greater than 0", "err"); return; }
           if (d.phMin != null && d.phMax != null && d.phMax < d.phMin) { UI.toast("pH max must be >= pH min", "err"); return; }
-          if (isNew && Store.formulaById(d.id)) { UI.toast("FFS code already exists", "err"); return; }
-          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("FFS code already exists", "err"); return; }
+          if (isNew && Store.formulaById(d.id)) { UI.toast("Formula code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("Formula code already exists", "err"); return; }
           /* clean lines: remove empty material rows */
           d.lines = d.lines.filter(function (l) { return l.materialCode; });
           Store.saveFormula(d, isNew, rec ? rec.id : null);
