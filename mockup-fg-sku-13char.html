@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F/G SKU 13-char scheme — editor / brand master / recode (approval mockup)</title>
+</head>
+<body style="margin:0;background:#f3eeee">
+<style>
+.sku{
+  --ink:#404041; --muted:#6d6d6e; --faint:#919191;
+  --line:#efe3e3; --line-strong:#e2cdce; --bg:#f9f6f6; --card:#fff;
+  --accent:#b12024; --accent-dark:#8f1a1e; --accent-soft:#ffedee;
+  --green:#017544; --green-soft:#e2f3e9; --amber:#a86a10; --amber-soft:#fdf3dd;
+  --red:#b12024; --red-soft:#ffedee; --blue:#29567e; --blue-soft:#e6eef5;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(64,64,65,.05),0 6px 18px rgba(64,64,65,.07);
+  --font:"Public Sans","Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+  font-family:var(--font);font-size:14px;color:var(--ink);background:#f3eeee;
+  padding:22px 16px 48px;max-width:1180px;margin:0 auto;line-height:1.45;
+}
+.sku *{box-sizing:border-box}
+.sku h1{font-size:21px;font-weight:650;margin:0 0 4px}
+.sku h2{font-size:16px;font-weight:650;margin:0}
+.sku h3{font-size:13.5px;font-weight:650;margin:0}
+.sku .sub{margin:0 0 16px;color:var(--muted);font-size:13px;max-width:880px}
+.sku .mono{font-family:var(--mono)}
+.sku .muted{color:var(--muted)}
+.sku .faint{color:var(--faint)}
+
+/* scheme legend */
+.sku .legend{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;margin:0 0 20px}
+.sku .seg{border:1px solid var(--line-strong);background:#fff;border-radius:10px;padding:8px 12px;text-align:center;min-width:74px}
+.sku .seg .code{font:700 17px var(--mono);color:var(--accent-dark)}
+.sku .seg .nm{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:2px}
+.sku .seg .ex{font:600 11px var(--mono);color:var(--faint);margin-top:1px}
+.sku .seg-arrow{align-self:center;color:var(--faint);font-size:15px}
+
+/* panel framing */
+.sku .panel{margin:0 0 26px}
+.sku .panel-tag{display:inline-flex;align-items:center;gap:8px;font:700 11px var(--font);letter-spacing:.7px;text-transform:uppercase;color:var(--accent-dark);background:var(--accent-soft);border:1px solid #f0d3d6;border-radius:999px;padding:5px 12px;margin:0 0 10px}
+.sku .panel-note{font-size:12px;color:var(--muted);margin:0 0 12px;max-width:900px}
+
+/* card */
+.sku .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px}
+.sku .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.sku .card-head .hint{font-size:11.5px;color:var(--muted)}
+.sku .card-body{padding:16px}
+.sku .card-body.tight{padding:0}
+
+/* buttons */
+.sku .btn{border:1px solid var(--line-strong);background:#fff;color:var(--ink);font:600 12.5px var(--font);padding:7px 15px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.sku .btn:hover{background:#faf4f4}
+.sku .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.sku .btn-primary:hover{background:var(--accent-dark)}
+.sku .btn-danger{background:#fff;border-color:#f0b9bc;color:var(--red)}
+.sku .btn-sm{padding:4px 10px;font-size:11.5px}
+.sku .btn[disabled]{opacity:.5;cursor:not-allowed}
+.sku .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* pills */
+.sku .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.sku .pill.aktif{background:var(--green-soft);color:var(--green);border:1px solid #bfe3c8}
+.sku .pill.nonaktif{background:var(--red-soft);color:var(--red);border:1px solid #f3c1bd}
+.sku .pill.pending{background:var(--amber-soft);color:var(--amber);border:1px solid #f0d9a8}
+.sku .pill.none{background:#eef1f4;color:var(--faint);border:1px solid var(--line)}
+.sku .tag{display:inline-block;font-size:10.5px;font-weight:600;color:var(--muted);background:#f1f4f7;border:1px solid var(--line);border-radius:4px;padding:1px 6px;white-space:nowrap}
+
+/* forms */
+.sku .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:0}
+.sku .field>label{font-size:10.8px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.sku .field .hint{font-size:11px;color:var(--faint)}
+.sku .input{border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:var(--ink);background:#fff;width:100%}
+.sku .input:focus{outline:2px solid #f5c2c5;border-color:var(--accent)}
+.sku .input[readonly],.sku .input[disabled]{background:#f7f3f3;color:var(--muted)}
+.sku .input.mono{font-family:var(--mono)}
+.sku select.input{appearance:auto;cursor:pointer}
+.sku .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.sku .form-grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sku .form-grid .span-2{grid-column:1/-1}
+.sku fieldset.role-group{border:1px solid var(--line);border-radius:8px;padding:12px 14px 4px;margin:0 0 14px}
+.sku fieldset.role-group legend{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent-dark);background:var(--accent-soft);border:1px solid #f0d3d6;padding:2px 8px;border-radius:999px}
+.sku .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px}
+.sku .check-row input{width:16px;height:16px;accent-color:var(--accent)}
+.sku .lock-note{font-size:10.5px;color:var(--faint);font-style:italic}
+
+/* preview box */
+.sku .preview-box{background:#f8fafb;border:1px dashed var(--line-strong);border-radius:8px;padding:12px 14px;display:flex;gap:26px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.sku .preview-box .pv-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint)}
+.sku .preview-box .pv-kode{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:1px;color:var(--ink)}
+.sku .preview-box .pv-seg{font-size:11.5px;color:var(--muted);margin-top:4px}
+
+/* live segment breakdown chips */
+.sku .breakdown{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.sku .bk{border:1px solid var(--line-strong);border-radius:7px;padding:4px 8px;text-align:center;background:#fff}
+.sku .bk .v{font:700 13px var(--mono);color:var(--accent-dark)}
+.sku .bk .k{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);margin-top:1px}
+
+/* tables */
+.sku table.tbl{width:100%;border-collapse:collapse;font-size:12.8px}
+.sku table.tbl th{text-align:left;font-size:10.8px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);background:#fbf4f4;border-bottom:1px solid var(--line-strong);padding:9px 12px;white-space:nowrap}
+.sku table.tbl td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sku table.tbl tbody tr:hover{background:#f7f9fb}
+.sku td.mono,.sku .mono{font-family:var(--mono);font-size:12px}
+.sku .row-muted{color:var(--faint)}
+
+/* modal (rendered inline as a panel for the mockup) */
+.sku .modal{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);width:100%;max-width:560px}
+.sku .modal.wide{max-width:100%}
+.sku .modal-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.sku .modal-head h3{font-size:15px}
+.sku .modal-x{border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--muted);line-height:1}
+.sku .modal-body{padding:18px}
+.sku .modal-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;background:#fdf7f7;border-radius:0 0 12px 12px}
+.sku .dialog-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:820px){.sku .dialog-row{grid-template-columns:1fr}.sku .form-grid.cols-3{grid-template-columns:1fr}}
+
+/* recode row */
+.sku .recode-row{background:#f8fafb;border:1px dashed var(--line-strong);border-radius:8px;padding:12px 14px;margin-bottom:12px}
+.sku .recode-head{margin-bottom:8px;font-size:13px}
+.sku .recode-head .mono{font-weight:700}
+.sku .newcode{font:700 15px var(--mono);color:var(--accent-dark)}
+.sku .hintline{font-size:11.5px;color:var(--faint);margin-top:18px;text-align:center;line-height:1.6}
+</style>
+
+<div class="sku">
+  <h1>F/G SKU — 13-character codification</h1>
+  <p class="sub">Approval mockup for the new finished-goods SKU scheme. Four screens in the app's visual language:
+  the new SKU editor with a live code preview, the Master Brand list, the one-time legacy Recode tool, and the two
+  revision dialogs. This file is a throwaway preview — nothing here is wired into the app.</p>
+
+  <!-- scheme legend -->
+  <div class="legend">
+    <div class="seg"><div class="code">BRL</div><div class="nm">Brand</div><div class="ex">3 letters</div></div>
+    <div class="seg-arrow">·</div>
+    <div class="seg"><div class="code">EY</div><div class="nm">Application</div><div class="ex">2 letters</div></div>
+    <div class="seg-arrow">·</div>
+    <div class="seg"><div class="code">CP</div><div class="nm">Form</div><div class="ex">2 letters</div></div>
+    <div class="seg-arrow">·</div>
+    <div class="seg"><div class="code">012</div><div class="nm">Sequence</div><div class="ex">001–999</div></div>
+    <div class="seg-arrow">·</div>
+    <div class="seg"><div class="code">A</div><div class="nm">Size</div><div class="ex">A=1st netto</div></div>
+    <div class="seg-arrow">·</div>
+    <div class="seg"><div class="code">01</div><div class="nm">Revision</div><div class="ex">from FPS</div></div>
+    <div class="seg-arrow">→</div>
+    <div class="seg" style="border-color:var(--accent);background:var(--accent-soft)"><div class="code">BRLEYCP012A01</div><div class="nm">Compact SKU</div><div class="ex">13 chars</div></div>
+  </div>
+
+  <!-- ============ PANEL 1: NEW FG SKU EDITOR ============ -->
+  <div class="panel">
+    <span class="panel-tag">1 · New Finish Good SKU editor</span>
+    <p class="panel-note">Brand + Formula + FPS drive the code automatically. Seq &amp; Size are assigned from the formula and
+    netto; Rev comes from the FPS. NA / expiry belong to Regulatory and start empty → <b>Pending BPOM</b>. Try the pickers —
+    the preview rebuilds live. In production these are searchable comboboxes; here they are plain selects.</p>
+
+    <div class="modal wide">
+      <div class="modal-head"><h3>New Finish Good SKU</h3><button class="modal-x" type="button">×</button></div>
+      <div class="modal-body">
+        <div class="preview-box">
+          <div>
+            <div class="pv-label">F/G SKU Code (auto, 13 chars)</div>
+            <div class="pv-kode" id="pvKode">BRLEYCP012A01</div>
+            <div class="pv-seg" id="pvSeg">Seq 012 · Size A (5 mL) · Rev 01</div>
+            <div class="breakdown" id="pvBreak"></div>
+          </div>
+          <div>
+            <div class="pv-label">F/G Status (auto)</div>
+            <div style="margin-top:6px"><span class="pill pending" id="pvStatus">Pending BPOM</span></div>
+          </div>
+        </div>
+
+        <fieldset class="role-group">
+          <legend>Brand &amp; masters</legend>
+          <div class="form-grid cols-3">
+            <div class="field">
+              <label>Brand</label>
+              <select class="input mono" id="iBrand">
+                <option value="BRL" selected>BRL — Browlash</option>
+                <option value="LVR">LVR — Laverne</option>
+                <option value="LBS">LBS — Labose</option>
+                <option value="SKD">SKD — Skindee</option>
+                <option value="MSL">MSL — Marieskin</option>
+              </select>
+              <span class="hint">Marketing owns brand codes.</span>
+            </div>
+            <div class="field">
+              <label>Formula (FFS)</label>
+              <select class="input" id="iFfs">
+                <option value="f1" selected>FFS-BRL-EY-012 — Browlash Eye Compact</option>
+                <option value="f2">FFS-BRL-FC-003 — Browlash Face Cream</option>
+                <option value="f3">FFS-LVR-SK-001 — Laverne Skin Toner</option>
+                <option value="f4">FFS-LBS-CL-001 — Labose Cleanser Liquid</option>
+              </select>
+              <span class="hint">RND Formula owns the link. Sets App + Form.</span>
+            </div>
+            <div class="field">
+              <label>Packaging (FPS)</label>
+              <select class="input" id="iFps">
+                <option value="p1" selected>100200100 — Compact 5 mL · rev 1</option>
+                <option value="p2">100200101 — Compact 9 mL · rev 1</option>
+                <option value="p3">100200102 — Compact 5 mL · rev 2</option>
+                <option value="p4">100200200 — Jar 50 mL · rev 1</option>
+              </select>
+              <span class="hint">RND Kemas owns the link. Sets Size + Rev.</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="role-group">
+          <legend>Regulatory</legend>
+          <div class="field">
+            <label>Product Description</label>
+            <input class="input" id="iDesc" value="Browlash Eye Compact Powder 5 mL">
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>NA Code (BPOM)</label>
+              <input class="input mono" id="iNa" placeholder="NA1826..." value="">
+              <span class="hint">Leave empty while registration is in progress → Pending BPOM.</span>
+            </div>
+            <div class="field">
+              <label>NA Expiry Date</label>
+              <input class="input" type="date" id="iExp" value="">
+              <span class="hint">Passed date → Non Aktif on next refresh.</span>
+            </div>
+          </div>
+          <div class="lock-note">Shown unlocked here for preview. For a non-Regulatory role these two fields are disabled (locked — Regulatory owns Kode NA / expiry).</div>
+        </fieldset>
+
+        <label class="check-row"><input type="checkbox" id="iDisc"> Discontinue / superseded revision (forces status Non Aktif)</label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" type="button">Cancel</button>
+        <button class="btn btn-primary" type="button">Save SKU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PANEL 2: MASTER BRAND ============ -->
+  <div class="panel">
+    <span class="panel-tag">2 · Master Brand</span>
+    <p class="panel-note">A separate brand master. A customer may own several brands. The 3-letter code is the first segment of
+    every SKU. Marketing edits; everyone reads. Delete is blocked while any SKU uses the brand.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>Master Brand</h3>
+        <div class="btn-row">
+          <input class="input" style="width:240px" placeholder="Search code / name / customer...">
+          <button class="btn btn-primary btn-sm" type="button">+ New Brand</button>
+        </div>
+      </div>
+      <div class="card-body tight">
+        <table class="tbl">
+          <thead><tr><th>Brand Code</th><th>Brand Name</th><th>Customer</th><th>SKUs</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">BRL</td><td>Browlash</td><td>PT Browlash Indonesia</td><td>4</td>
+              <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
+            <tr><td class="mono">LVR</td><td>Laverne</td><td>PT Laverne Kosmetik</td><td>3</td>
+              <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
+            <tr><td class="mono">LBS</td><td>Labose</td><td>PT Labose Beauty</td><td>4</td>
+              <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
+            <tr><td class="mono">MSL</td><td>Marieskin</td><td>PT Marieskin Natura</td><td>1</td>
+              <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
+            <tr><td class="mono">SKD</td><td>Skindee</td><td><span class="row-muted">-</span></td><td>2</td>
+              <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal" style="max-width:480px">
+      <div class="modal-head"><h3>New Brand</h3><button class="modal-x" type="button">×</button></div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field">
+            <label>Brand Code</label>
+            <input class="input mono" maxlength="3" placeholder="e.g. BRL" value="BRL">
+            <span class="hint">Exactly 3 uppercase letters.</span>
+          </div>
+          <div class="field">
+            <label>Brand Name</label>
+            <input class="input" placeholder="Brand name" value="Browlash">
+          </div>
+          <div class="field span-2">
+            <label>Customer</label>
+            <select class="input">
+              <option>(no customer)</option>
+              <option selected>PT Browlash Indonesia (CUST-BRL)</option>
+              <option>PT Laverne Kosmetik (CUST-LVR)</option>
+              <option>PT Labose Beauty (CUST-LBS)</option>
+            </select>
+            <span class="hint">Optional — a customer can own several brands.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" type="button">Cancel</button>
+        <button class="btn btn-primary" type="button">Save Brand</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PANEL 3: RECODE TOOL ============ -->
+  <div class="panel">
+    <span class="panel-tag">3 · SKU Recode (one-time, Admin)</span>
+    <p class="panel-note">Legacy rows keep their <span class="mono">FFS|FPS</span> id and downstream documents untouched. The tool
+    proposes a 13-char code oldest-first; Seq &amp; Size can be overridden before confirming. The old code is kept as
+    <b>Legacy Code</b>. Export crosswalk maps old → new for Finance / Accurate.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>SKU Recode</h3>
+        <button class="btn btn-sm" type="button">Export crosswalk CSV</button>
+      </div>
+      <div class="card-body">
+        <p class="muted" style="font-size:12px;margin:0 0 14px">3 legacy SKU(s). Rows are proposed oldest-first; confirm each row
+        (or fix the proposal) to issue its 13-char code. Ids and downstream documents never change; the old code is kept as Legacy Code.</p>
+
+        <div class="recode-row">
+          <div class="recode-head"><span class="mono">TO01MR03|100200100</span> <span class="muted">— Marieskin Toner Liquid 100 mL</span></div>
+          <div class="form-grid cols-3">
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>MSL — Marieskin</option><option>BRL — Browlash</option></select></div>
+            <div class="field"><label>Formula</label><select class="input"><option selected>TO01MR03 — Marieskin Toner</option></select></div>
+            <div class="field"><label>FPS</label><select class="input"><option selected>100200100 · 100 mL</option></select></div>
+            <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="1" style="width:80px"></div>
+            <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="A" style="width:56px"></div>
+            <div class="field"><label>New code</label><div class="newcode" style="padding:8px 0">MSLSKLQ001A01</div></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button">Confirm recode</button>
+        </div>
+
+        <div class="recode-row">
+          <div class="recode-head"><span class="mono">LV02CR01|100200200</span> <span class="muted">— Laverne Cream Jar 50 mL</span></div>
+          <div class="form-grid cols-3">
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>LVR — Laverne</option></select></div>
+            <div class="field"><label>Formula</label><select class="input"><option selected>LV02CR01 — Laverne Cream</option></select></div>
+            <div class="field"><label>FPS</label><select class="input"><option selected>100200200 · 50 mL</option></select></div>
+            <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="1" style="width:80px"></div>
+            <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="A" style="width:56px"></div>
+            <div class="field"><label>New code</label><div class="newcode" style="padding:8px 0">LVRFCR001A01</div></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button">Confirm recode</button>
+        </div>
+
+        <div class="recode-row" style="opacity:.7">
+          <div class="recode-head"><span class="mono">LB01CL01|100200300</span> <span class="muted">— Labose Cleanser 100 mL</span>
+            <span class="tag" style="margin-left:6px">incomplete — pick formula</span></div>
+          <div class="form-grid cols-3">
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>LBS — Labose</option></select></div>
+            <div class="field"><label>Formula</label><select class="input"><option selected>(formula)</option></select></div>
+            <div class="field"><label>FPS</label><select class="input"><option selected>100200300 · 100 mL</option></select></div>
+            <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="0" style="width:80px"></div>
+            <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="" style="width:56px"></div>
+            <div class="field"><label>New code</label><div class="newcode faint" style="padding:8px 0">(incomplete)</div></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button" disabled>Confirm recode</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PANEL 4: REVISION DIALOGS ============ -->
+  <div class="panel">
+    <span class="panel-tag">4 · Revision dialogs</span>
+    <p class="panel-note">Two separate actions replace the old single “Revision” button. Formula revision keeps the same code;
+    packaging revision issues a new code at the higher FPS revision and discontinues the old one. Both clear NA → Pending BPOM.</p>
+
+    <div class="dialog-row">
+      <div class="modal">
+        <div class="modal-head"><h3>Formula revision — BRLEYCP012A01</h3><button class="modal-x" type="button">×</button></div>
+        <div class="modal-body">
+          <p class="muted" style="font-size:12px;margin:0 0 14px">Keeps the same SKU code; swaps the formula link; clears NA
+          (BPOM recertification). The new formula must have the same category + dosage form.</p>
+          <div class="field">
+            <label>New Formula</label>
+            <select class="input"><option>(select formula)</option><option selected>FFS-BRL-EY-013 — Browlash Eye Compact v2</option></select>
+          </div>
+          <div class="preview-box" style="margin-bottom:0">
+            <div><div class="pv-label">Code stays</div><div class="pv-kode" style="font-size:16px">BRLEYCP012A01</div></div>
+            <div><div class="pv-label">Status after</div><div style="margin-top:6px"><span class="pill pending">Pending BPOM</span></div></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn" type="button">Cancel</button><button class="btn btn-primary" type="button">Apply revision</button></div>
+      </div>
+
+      <div class="modal">
+        <div class="modal-head"><h3>Packaging revision — BRLEYCP012A01</h3><button class="modal-x" type="button">×</button></div>
+        <div class="modal-body">
+          <p class="muted" style="font-size:12px;margin:0 0 14px">Creates a new SKU at the higher FPS revision (same netto); the
+          old SKU is discontinued and NA cleared (BPOM recertification).</p>
+          <div class="field">
+            <label>New FPS (higher revision, same netto)</label>
+            <select class="input"><option>(select FPS)</option><option selected>100200102 · rev 2 · 5 mL</option></select>
+          </div>
+          <div class="preview-box" style="margin-bottom:0">
+            <div><div class="pv-label">New code</div><div class="pv-kode" style="font-size:16px">BRLEYCP012A02</div></div>
+            <div><div class="pv-label">Old SKU</div><div style="margin-top:6px"><span class="pill nonaktif">Non Aktif</span></div></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn" type="button">Cancel</button><button class="btn btn-primary" type="button">Create revision</button></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="hintline">Mockup only · rose/cream design tokens match <span class="mono">assets/css/app.css</span> · codes render in the mono face ·
+  issued codes are frozen (segments stored on the row, never re-derived) · legacy ids and downstream documents never change.</p>
+</div>
+
+<script>
+/* Light interactivity for panel 1 only — illustrates the live code build.
+   Production uses Engine.skuCode / seqFor / sizeFor; this is a fixed demo map. */
+(function () {
+  var APP = { "Eye Makeup": "EY", "Face Makeup": "FC", "Skincare": "SK", "Cleansers & Makeup Removers": "CL" };
+  var FORMS = { LQ: "Liquid", CR: "Cream", SS: "Semi-Solid", LP: "Loose Powder", CP: "Compact Powder", LS: "Lipstick", ST: "Stick" };
+  var formulas = {
+    f1: { app: "EY", form: "CP", seq: 12, label: "Eye Makeup · Compact Powder" },
+    f2: { app: "FC", form: "CR", seq: 3,  label: "Face Makeup · Cream" },
+    f3: { app: "SK", form: "LQ", seq: 1,  label: "Skincare · Liquid" },
+    f4: { app: "CL", form: "LQ", seq: 1,  label: "Cleansers · Liquid" }
+  };
+  var fps = {
+    p1: { size: "A", netto: 5,  rev: 1 },
+    p2: { size: "B", netto: 9,  rev: 1 },
+    p3: { size: "A", netto: 5,  rev: 2 },
+    p4: { size: "A", netto: 50, rev: 1 }
+  };
+  function pad(n, w) { n = String(n); while (n.length < w) n = "0" + n; return n; }
+  var iBrand = document.getElementById("iBrand"),
+      iFfs = document.getElementById("iFfs"),
+      iFps = document.getElementById("iFps"),
+      iNa = document.getElementById("iNa"),
+      iExp = document.getElementById("iExp"),
+      iDisc = document.getElementById("iDisc");
+  function render() {
+    var b = iBrand.value, f = formulas[iFfs.value], p = fps[iFps.value];
+    var code = b + f.app + f.form + pad(f.seq, 3) + p.size + pad(p.rev, 2);
+    document.getElementById("pvKode").textContent = code;
+    document.getElementById("pvSeg").textContent = "Seq " + pad(f.seq, 3) + " · Size " + p.size + " (" + p.netto + " mL) · Rev " + pad(p.rev, 2);
+    var parts = [
+      [b, "Brand"], [f.app, "App"], [f.form, "Form"], [pad(f.seq, 3), "Seq"], [p.size, "Size"], [pad(p.rev, 2), "Rev"]
+    ];
+    var bk = document.getElementById("pvBreak");
+    bk.innerHTML = "";
+    parts.forEach(function (pt) {
+      var d = document.createElement("div"); d.className = "bk";
+      d.innerHTML = '<div class="v">' + pt[0] + '</div><div class="k">' + pt[1] + '</div>';
+      bk.appendChild(d);
+    });
+    var st = document.getElementById("pvStatus");
+    var na = iNa.value.trim(), exp = iExp.value;
+    var today = new Date().toISOString().slice(0, 10);
+    if (iDisc.checked) { st.className = "pill nonaktif"; st.textContent = "Non Aktif"; }
+    else if (exp && exp < today) { st.className = "pill nonaktif"; st.textContent = "Non Aktif"; }
+    else if (!na) { st.className = "pill pending"; st.textContent = "Pending BPOM"; }
+    else { st.className = "pill aktif"; st.textContent = "Aktif"; }
+  }
+  [iBrand, iFfs, iFps].forEach(function (n) { n.addEventListener("change", render); });
+  [iNa, iExp].forEach(function (n) { n.addEventListener("input", render); });
+  iDisc.addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>
