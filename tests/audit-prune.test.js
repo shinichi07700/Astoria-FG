@@ -1,7 +1,7 @@
 /* ============================================================
    Golden-vector unit tests for the audit-log housekeeping core:
-   the client-side mirror of migration 015's retention rules -
-   the 365-day floor the date picker may never go past, the WIB
+   the client-side mirror of migration 019's retention rules -
+   the 730-day (2-year) floor the date picker may never go past, the WIB
    cutoff instant sent to admin_prune_audit, and the stat
    formatters shown in the Settings & Data card.
    Run: node tests/audit-prune.test.js
@@ -18,20 +18,20 @@ function eq(name, got, want) {
   else console.log("PASS " + name);
 }
 
-/* Retention floor contract with supabase/migrations/015_audit_prune.sql
-   (now() - interval '365 days'). If either side changes, change both. */
-eq("retention floor matches migration 015", A.RETENTION_DAYS, 365);
+/* Retention floor contract with supabase/migrations/019_audit_retention_2y.sql
+   (now() - interval '730 days'). If either side changes, change both. */
+eq("retention floor matches migration 019", A.RETENTION_DAYS, 730);
 
 /* ---------- floorDate(nowMs) - oldest day the picker may offer, in WIB ---------- */
 var T0 = Date.UTC(2026, 9, 7);                   /* 2026-10-07T00:00:00Z */
-eq("floorDate: mid-day UTC lands on the calendar date 365 days back",
-  A.floorDate(T0), "2025-10-07");
+eq("floorDate: mid-day UTC lands on the calendar date 730 days back",
+  A.floorDate(T0), "2024-10-07");
 eq("floorDate: 14:00Z stays on the same WIB date",
-  A.floorDate(T0 + 14 * 3600000), "2025-10-07");
+  A.floorDate(T0 + 14 * 3600000), "2024-10-07");
 eq("floorDate: 16:59Z is still 23:59 WIB of the day before",
-  A.floorDate(Date.UTC(2026, 9, 6, 16, 59)), "2025-10-06");
+  A.floorDate(Date.UTC(2026, 9, 6, 16, 59)), "2024-10-06");
 eq("floorDate: 17:00Z is exactly WIB midnight, rolling the date forward",
-  A.floorDate(Date.UTC(2026, 9, 6, 17, 0)), "2025-10-07");
+  A.floorDate(Date.UTC(2026, 9, 6, 17, 0)), "2024-10-07");
 eq("floorDate: non-finite input yields no floor",
   A.floorDate("not-a-number"), "");
 eq("floorDate: missing input yields no floor",

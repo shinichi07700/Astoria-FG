@@ -2,17 +2,17 @@
    AUDIT PRUNE - Admin housekeeping for the cloud audit_log.
 
    The trail is append-only by RLS design (no DELETE policy for any
-   role), so pruning runs through the migration-015 security definer
-   RPCs, which re-check the Admin role and enforce the 365-day
-   retention floor server-side. Everything here is presentation and
-   parameter shaping for those RPCs; the floor below MUST keep
-   matching the one inside admin_prune_audit (see
-   tests/audit-prune.test.js).
+   role), so pruning runs through the security definer RPCs (created
+   in migration 015, floor raised by 019), which re-check the Admin
+   role and enforce the 730-day (2-year) retention floor server-side.
+   Everything here is presentation and parameter shaping for those
+   RPCs; the floor below MUST keep matching the one inside
+   admin_prune_audit (see tests/audit-prune.test.js).
    ============================================================ */
 window.AuditPrune = (function () {
   "use strict";
 
-  var RETENTION_DAYS = 365;
+  var RETENTION_DAYS = 730;
   var WIB_MS = 7 * 60 * 60 * 1000;
 
   /* ---------- pure decisions (covered by tests/audit-prune.test.js) ---------- */
@@ -67,7 +67,7 @@ window.AuditPrune = (function () {
   }
 
   /* Resolves { removed } or rejects with the server's guard message
-     (non-Admin, or cutoff newer than the 365-day floor). */
+     (non-Admin, or cutoff newer than the 730-day floor). */
   function prune(day) {
     var cutoff = cutoffUtc(day);
     if (!cutoff) return Promise.reject(new Error("Pick a cutoff date at least " + RETENTION_DAYS + " days back."));
