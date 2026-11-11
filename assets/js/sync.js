@@ -61,6 +61,7 @@ window.Sync = (function () {
   var has012 = false;
   var has016 = false;
   var has018 = false;
+  var has020 = false;
   var TABLES_018 = ["m_formula", "m_formula_lab", "m_formula_stab", "m_formula_machine", "m_packaging"];
 
   /* Migration 009 adds m_supplier.category. Until it runs the column is
@@ -90,7 +91,8 @@ window.Sync = (function () {
       probe("m_formula", "lines", function (ok) { if (ok) has011 = true; }),
       probe("m_packaging", "volume_ml", function (ok) { has012 = ok; }),
       probe("m_formula", "product_name", function (ok) { if (ok) has016 = true; }),
-      probe("m_formula", "pdr_no", function (ok) { if (ok) has018 = true; })
+      probe("m_formula", "pdr_no", function (ok) { if (ok) has018 = true; }),
+      probe("fg_master", "legacy_code", function (ok) { if (ok) has020 = true; })
     ]);
   }
 
@@ -108,6 +110,7 @@ window.Sync = (function () {
   }
   function mark(table, key, op) {
     if (!enabled()) return;
+    if (table === "m_brand" && !has020) return;
     pending[table + ":" + key] = { table: table, key: key, op: op || "upsert" };
     savePending();
     flushSoon();
@@ -117,19 +120,31 @@ window.Sync = (function () {
 
   /* ---------- row mappers (camelCase <-> snake_case) ---------- */
   function fgRow(f) {
-    return {
+    var row = {
       id: f.id, ffs: f.ffs, fps: f.fps, deskripsi: f.deskripsi || "",
       kode_na: f.kodeNA || "", tgl_expire: f.tglExpire || "", discontinue: !!f.discontinue,
       kode_fg: f.kodeFG || "", status: f.status || "",
       diubah_oleh: f.diubahOleh || "", waktu_update: f.waktuUpdate || ""
     };
+    if (has020) {
+      row.brand_id = f.brandId || null; row.formula_id = f.formulaId || null; row.packaging_id = f.packagingId || null;
+      row.app = f.app || ""; row.form = f.form || ""; row.seq = Number(f.seq) || 0;
+      row.size_letter = f.sizeLetter || ""; row.netto_ml = Number(f.nettoMl) || 0;
+      row.rev = Number(f.rev) || 0; row.legacy_code = f.legacyCode || "";
+    }
+    return row;
   }
   function fgFrom(r) {
+    if (r.legacy_code !== undefined) has020 = true;
     return {
       id: r.id, ffs: r.ffs, fps: r.fps, deskripsi: r.deskripsi,
       kodeNA: r.kode_na, tglExpire: r.tgl_expire, discontinue: !!r.discontinue,
       diubahOleh: r.diubah_oleh, waktuUpdate: r.waktu_update,
-      kodeFG: r.kode_fg, status: r.status
+      kodeFG: r.kode_fg, status: r.status,
+      brandId: r.brand_id || "", formulaId: r.formula_id || "", packagingId: r.packaging_id || "",
+      app: r.app || "", form: r.form || "", seq: Number(r.seq) || 0,
+      sizeLetter: r.size_letter || "", nettoMl: Number(r.netto_ml) || 0,
+      rev: Number(r.rev) || 0, legacyCode: r.legacy_code || ""
     };
   }
   function matRow(m) {
@@ -167,6 +182,8 @@ window.Sync = (function () {
       id: r.id, name: r.name, address: r.address, pic: r.pic, contact: r.contact, terms: r.terms
     };
   }
+  function brandRow(b) { return { id: b.id, name: b.name || "", customer_id: b.customerId || null }; }
+  function brandFrom(r) { return { id: r.id, name: r.name || "", customerId: r.customer_id || "" }; }
   function supRow(s) {
     var row = {
       id: s.id, name: s.name || "", address: s.address || "", pic: s.pic || "",
@@ -193,17 +210,20 @@ window.Sync = (function () {
     if (has011) { row.lines = f.lines || []; }
     if (has016) { row.product_name = f.productName || ""; row.variant = f.variant || ""; }
     if (has018) { row.pdr_no = f.pdrNo || ""; row.special_handling = f.specialHandling || []; }
+    if (has020) { row.dosage_form = f.dosageForm || ""; }
     return row;
   }
   function formulaFrom(r) {
     if (r.lines !== undefined) has011 = true;
     if (r.pdr_no !== undefined) has018 = true;
+    if (r.dosage_form !== undefined) has020 = true;
     return {
       id: r.id, kategori: r.kategori, customerId: r.customer_id || "", urutan: Number(r.urutan) || 0,
       bj: Number(r.bj) || 1, phMin: r.ph_min == null ? "" : Number(r.ph_min), phMax: r.ph_max == null ? "" : Number(r.ph_max),
       viscosity: r.viscosity, stabTk: r.stab_tk, stabTkul: r.stab_tkul, stabT50: r.stab_t50, stabTm: r.stab_tm,
       productName: r.product_name || "", variant: r.variant || "",
       pdrNo: r.pdr_no || "", specialHandling: r.special_handling || [],
+      dosageForm: r.dosage_form || "",
       note: r.note, lines: r.lines || []
     };
   }
@@ -301,17 +321,21 @@ window.Sync = (function () {
       row.fill_min_ml = p.fillMinMl == null ? null : Number(p.fillMinMl);
       row.fill_max_ml = p.fillMaxMl == null ? null : Number(p.fillMaxMl);
     }
+    /* 020 re-adds revisi (012 dropped it) as the SKU Rev segment, 1-99 */
+    if (has020) { row.revisi = Number(p.revisi) || 1; }
     return row;
   }
   function packFrom(r) {
     if (r.lines !== undefined) has011 = true;
     if (r.volume_ml !== undefined) has012 = true;
     if (r.variants !== undefined) has018 = true;
+    if (r.revisi !== undefined && has012) has020 = true;
     return {
       id: r.id, customerId: r.customer_id || "", urutanVarian: Number(r.urutan_varian) || 0,
       productName: r.product_name || "",
       volumeMl: has012 ? Number(r.volume_ml) || 0 : Number(r.fill_min) || 0,
       fillTolPct: has012 ? Number(r.fill_tol_pct) || 0 : 0,
+      revisi: Number(r.revisi) || 1,
       inkjetSyntax: r.inkjet_syntax, note: r.note,
       variants: r.variants || [], container: r.container || [], machines: r.machines || [],
       steps: r.steps || [], storageTemp: r.storage_temp || "", mboxQty: Number(r.mbox_qty) || 0,
@@ -719,6 +743,8 @@ window.Sync = (function () {
        carry a supplier_id FK to it (migration 007); upserts run parents-before-
        dependents in TABLES order, and deletes run in reverse. */
     { name: "m_supplier", pk: "id", key: "id", store: "suppliers", v: 7, row: supRow, from: supFrom },
+    /* m_brand before fg_master: fg_master.brand_id FK targets it (020) */
+    { name: "m_brand", pk: "id", key: "id", store: "brands", v: 20, row: brandRow, from: brandFrom },
     { name: "fg_master", pk: "id", key: "id", store: "fgs", v: 1, row: fgRow, from: fgFrom },
     { name: "materials", pk: "code", key: "code", store: "materials", v: 1, row: matRow, from: matFrom },
     { name: "m_customer", pk: "id", key: "id", store: "customers", v: 2, row: custRow, from: custFrom },
