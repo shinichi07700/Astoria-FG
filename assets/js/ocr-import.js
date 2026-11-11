@@ -64,6 +64,7 @@ window.OCRImport = (function () {
     var draft = {
       id: codeOf(f),
       kategori: String(f.kategori == null ? "" : f.kategori).trim(),
+      dosageForm: String(f.dosageForm == null ? "" : f.dosageForm).trim(),
       customerId: "", urutan: 0,
       bj: 1, phMin: "", phMax: "",
       viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",

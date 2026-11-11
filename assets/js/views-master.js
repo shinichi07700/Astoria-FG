@@ -1102,6 +1102,7 @@ window.ViewsMaster = (function () {
     var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. LB01SC04BB" });
     if (opts.lockCode) { iCode.disabled = true; iCode.title = "The Formula Code keys all four parts and can't be changed here."; }
     var iKat = UI.select([["", "(select category)"]].concat(FFS_CATS.map(function (c) { return [c, c]; })), d.kategori || "");
+    var iForm = UI.select([["", "(select dosage form)"]].concat(Engine.DOSAGE_FORMS), d.dosageForm || "");
     var iCust = customerCombo(d.customerId);
     var iPdr = UI.input({ class: "input mono", value: d.pdrNo || "", placeholder: "e.g. 077/01/2026" });
     var iProductName = UI.input({ value: d.productName || "", placeholder: "e.g. Foundation Cream" });
@@ -1214,6 +1215,7 @@ window.ViewsMaster = (function () {
         UI.field("Product Name", iProductName),
         UI.field("Variant", iVariant),
         UI.field("Category", iKat),
+        UI.field("Dosage Form", iForm, "Feeds the Form segment of the SKU code."),
         UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss).")
       ]),
       UI.el("p", { class: "hint", style: "margin:2px 0 10px",
@@ -1225,7 +1227,7 @@ window.ViewsMaster = (function () {
     if (opts.importInfo) body.insertBefore(importBanner(opts.importInfo, opts.existingRec || null), body.firstChild);
 
     function collect() {
-      d.id = iCode.value.trim(); d.kategori = iKat.value; d.customerId = iCust.value || "";
+      d.id = iCode.value.trim(); d.kategori = iKat.value; d.dosageForm = iForm.value; d.customerId = iCust.value || "";
       d.pdrNo = iPdr.value.trim();
       d.productName = iProductName.value.trim(); d.variant = iVariant.value.trim();
       d.bj = Number(iBj.value) || 0; d.note = iNote.value.trim();
@@ -1248,7 +1250,7 @@ window.ViewsMaster = (function () {
     var isNew = !rec;
     var clone = function (o) { return o == null ? null : JSON.parse(JSON.stringify(o)); };
     var d = Object.assign({
-      id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "", viscosity: "",
+      id: "", kategori: "", dosageForm: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "", viscosity: "",
       stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-", productName: "", variant: "",
       pdrNo: "", specialHandling: [], note: "", lines: []
     }, clone(rec) || {});
@@ -1452,7 +1454,7 @@ window.ViewsMaster = (function () {
     if (!RBAC.canEditMaster("packagings")) { UI.toast("Packaging master is read-only for your role", "err"); return; }
     var isNew = !rec;
     var d = Object.assign({ id: "", customerId: "", productName: "", urutanVarian: 0,
-      volumeMl: 0, fillTolPct: 0, fillMinMl: null, fillMaxMl: null,
+      volumeMl: 0, fillTolPct: 0, fillMinMl: null, fillMaxMl: null, revisi: 1,
       storageTemp: "", mboxQty: 0, inkjetSyntax: "", note: "",
       variants: [], container: [], machines: [], steps: [], lines: [] }, rec || {});
     if (!d.lines) d.lines = [];
@@ -1464,6 +1466,7 @@ window.ViewsMaster = (function () {
     var iCust = customerCombo(d.customerId);
     var iProd = UI.input({ value: d.productName || "", placeholder: "e.g. SASC Liquid Blush" });
     var iVol = UI.input({ type: "number", step: "0.01", min: "0", value: String(d.volumeMl || 0) });
+    var iRev = UI.input({ type: "number", step: "1", min: "1", max: "99", value: String(d.revisi || 1) });
     var iFillMin = UI.input({ type: "number", step: "0.01", min: "0", value: d.fillMinMl == null ? "" : String(d.fillMinMl) });
     var iFillMax = UI.input({ type: "number", step: "0.01", min: "0", value: d.fillMaxMl == null ? "" : String(d.fillMaxMl) });
     var iStore = UI.input({ value: d.storageTemp || "", placeholder: "e.g. 25\u201337 \u00b0C" });
@@ -1597,6 +1600,7 @@ window.ViewsMaster = (function () {
         UI.field("Customer", iCust),
         UI.field("Product Name", iProd),
         UI.field("Volume / Netto (mL)", iVol, "Nominal fill volume."),
+        UI.field("Revision (01-99)", iRev, "Feeds the Rev segment of the SKU code; bump on packaging revision."),
         UI.field("Fill min (mL)", iFillMin, "Absolute QA fill band; overrides nominal \u00b1 tolerance when both are set."),
         UI.field("Fill max (mL)", iFillMax),
         UI.field("FG storage temp", iStore),
@@ -1619,6 +1623,7 @@ window.ViewsMaster = (function () {
           d.id = iCode.value.trim(); d.customerId = iCust.value || "";
           d.productName = iProd.value.trim();
           d.volumeMl = Number(iVol.value) || 0;
+          d.revisi = Math.min(99, Math.max(1, Number(iRev.value) || 1));
           d.fillMinMl = iFillMin.value.trim() === "" ? null : Number(iFillMin.value);
           d.fillMaxMl = iFillMax.value.trim() === "" ? null : Number(iFillMax.value);
           d.storageTemp = iStore.value.trim();
@@ -1637,8 +1642,9 @@ window.ViewsMaster = (function () {
             var dev = Math.max(Math.abs(d.fillMaxMl - d.volumeMl), Math.abs(d.volumeMl - d.fillMinMl));
             d.fillTolPct = Math.round(dev / d.volumeMl * 10000) / 100;
           }
-          /* drop the pre-012 parameters an old working copy may carry */
-          delete d.fillMin; delete d.fillMax; delete d.revisi; delete d.shrinkTunnelC;
+          /* drop the pre-012 parameters an old working copy may carry (revisi
+             is kept - 020 re-adds it as the SKU Rev segment) */
+          delete d.fillMin; delete d.fillMax; delete d.shrinkTunnelC;
           if (!d.id) { UI.toast("FPS code is required", "err"); return; }
           if (d.volumeMl < 0) { UI.toast("Volume must be >= 0", "err"); return; }
           if (d.fillMinMl != null && d.fillMinMl < 0) { UI.toast("Fill min must be >= 0", "err"); return; }
