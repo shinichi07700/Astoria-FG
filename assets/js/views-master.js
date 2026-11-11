@@ -242,6 +242,11 @@ window.ViewsMaster = (function () {
   function renderFGTable(body) {
     UI.clear(body);
     var db = Store.get();
+    var legacy = db.fgs.filter(function (f) { return f.id.indexOf("|") >= 0; }).length;
+    if (legacy) body.appendChild(UI.el("div", { class: "preview-box", style: "margin-bottom:10px" }, [
+      UI.el("span", { text: legacy + " SKU(s) still on the legacy FFS-FPS code. " }),
+      UI.btn("Open recode tool", function () { App.go("recode"); }, "btn-sm")
+    ]));
     var q = fgFilter.q.toLowerCase();
     var rows = db.fgs.filter(function (f) {
       /* Discontinue shows every flagged row; Non Aktif shows only rows that
@@ -250,7 +255,7 @@ window.ViewsMaster = (function () {
       else if (fgFilter.status === "Non Aktif") { if (f.status !== "Non Aktif" || f.discontinue) return false; }
       else if (fgFilter.status !== "ALL" && f.status !== fgFilter.status) return false;
       if (!q) return true;
-      return (f.kodeFG + " " + f.deskripsi + " " + f.ffs + " " + f.fps + " " + f.kodeNA).toLowerCase().indexOf(q) >= 0;
+      return (f.kodeFG + " " + (f.legacyCode || "") + " " + f.deskripsi + " " + (f.brandId || "") + " " + (f.formulaId || f.ffs) + " " + (f.packagingId || f.fps) + " " + f.kodeNA).toLowerCase().indexOf(q) >= 0;
     });
     /* most recently updated first (Waktu Update desc) */
     rows.sort(Store.fgRecentCompare);
@@ -273,8 +278,9 @@ window.ViewsMaster = (function () {
         ]);
       } },
       { label: "F/G Status", render: function (r) { return UI.pill(r.status); } },
-      { label: "Formula Code", cls: "mono", key: "ffs" },
-      { label: "FPS Packaging", cls: "mono", key: "fps" },
+      { label: "Brand", cls: "mono", render: function (r) { return r.brandId || "<span class='row-muted'>-</span>"; } },
+      { label: "Formula Code", cls: "mono", render: function (r) { return r.formulaId || r.ffs; } },
+      { label: "FPS Packaging", cls: "mono", render: function (r) { return r.packagingId || r.fps; } },
       { label: "NA Code", cls: "mono", render: function (r) { return r.kodeNA || "<span class='row-muted'>-</span>"; } },
       { label: "NA Expiry Date", cls: "mono", render: function (r) { return r.tglExpire || "<span class='row-muted'>-</span>"; } },
       { label: "Discontinue", render: function (r) { return r.discontinue ? UI.tag("YES") : "<span class='row-muted'>-</span>"; } },
@@ -288,7 +294,8 @@ window.ViewsMaster = (function () {
     if (canEditFG()) cols.push({ label: "", render: function (r) {
         return UI.el("div", { class: "btn-row" }, [
           UI.btn("Edit", function () { fgEditor(r); }, "btn-sm"),
-          UI.btn("Revision", function () { fgRevision(r); }, "btn-sm"),
+          UI.btn("Rev Formula", function () { fgRevFormula(r); }, "btn-sm"),
+          UI.btn("Rev Packaging", function () { fgRevPackaging(r); }, "btn-sm"),
           UI.btn("Delete", function () {
             UI.confirmDialog("Delete F/G " + r.kodeFG + "? BOMs referencing it will keep a dangling reference.", function () {
               Store.deleteFG(r.id); App.refresh();
@@ -300,90 +307,138 @@ window.ViewsMaster = (function () {
   }
 
   function fgEditor(rec) {
-    if (!canEditFG()) {
-      UI.toast("Master F/G is read-only for " + (Store.get().meta.user || {}).role, "err");
-      return;
-    }
+    if (!canEditFG()) { UI.toast("Master F/G is read-only for " + (Store.get().meta.user || {}).role, "err"); return; }
     var isNew = !rec;
-    var d = Object.assign({ ffs: "", fps: "", deskripsi: "", kodeNA: "", tglExpire: "", discontinue: false }, rec || {});
-
+    /* Legacy rows keep their ffs|fps id until recoded: desc/NA/expiry stay
+       editable (Regulatory keeps working during the transition), but the
+       code itself can only change via the SKU Recode tool. */
+    var isLegacy = !isNew && !(rec.brandId && rec.seq);
+    var db = Store.get();
+    var d = Object.assign({ brandId: "", formulaId: "", packagingId: "", deskripsi: "", kodeNA: "", tglExpire: "", discontinue: false }, rec || {});
+    var rights = FG_FIELD_RIGHTS[(db.meta.user || {}).role] || {};
     var pvKode = UI.el("span", { class: "pv-kode", text: "-" });
     var pvStatus = UI.el("span");
-    function preview() {
-      pvKode.textContent = Engine.kodeFG(d.ffs, d.fps) || "(empty)";
-      UI.clear(pvStatus);
-      pvStatus.appendChild(UI.pill(Engine.evaluateStatus(d.ffs, d.fps, d.kodeNA, d.tglExpire, d.discontinue)));
+    var pvSeg = UI.el("div", { class: "hint", style: "margin-top:4px" });
+    function derived() {
+      var f = Store.formulaById(d.formulaId), p = Store.packagingById(d.packagingId);
+      var app = f ? Engine.appOf(f.kategori) : "", form = f ? (f.dosageForm || "") : "";
+      var netto = p ? Number(p.volumeMl) || 0 : 0, rev = p ? Number(p.revisi) || 1 : 0;
+      var seq = 0, size = "";
+      if (d.brandId && app && form && d.formulaId) {
+        seq = Engine.seqFor(db.fgs, d.brandId, app, form, d.formulaId);
+        size = Engine.sizeFor(db.fgs, d.brandId, app, form, seq, netto);
+      }
+      return { app: app, form: form, seq: seq, size: size, netto: netto, rev: rev };
     }
-
-    var iFfs = UI.input({ class: "input mono", value: d.ffs, placeholder: "e.g. TO01MR03" });
-    var iFps = UI.input({ class: "input mono", value: d.fps, placeholder: "e.g. 100200100" });
+    function codeOf(s) {
+      return (d.brandId && s.app && s.form && s.seq && s.size && s.rev)
+        ? Engine.skuCode({ brand: d.brandId, app: s.app, form: s.form, seq: s.seq, size: s.size, rev: s.rev }) : "";
+    }
+    function preview() {
+      if (!isNew) {
+        /* Issued codes are frozen: show the stored code, never re-derive. */
+        pvKode.textContent = rec.kodeFG;
+        pvSeg.textContent = isLegacy
+          ? "Legacy FFS-FPS code - use SKU Recode to issue the 13-char code."
+          : "Issued code - segments are frozen; masters links cannot change here.";
+        UI.clear(pvStatus);
+        pvStatus.appendChild(UI.pill(Engine.evaluateStatus(d.formulaId || d.ffs, d.packagingId || d.fps, d.kodeNA, d.tglExpire, d.discontinue)));
+        return;
+      }
+      var s = derived(), code = codeOf(s);
+      pvKode.textContent = code || "(empty)";
+      pvSeg.textContent = code
+        ? "Seq " + Engine.pad(s.seq, 3) + " · Size " + s.size + " (" + s.netto + " mL) · Rev " + Engine.pad(s.rev, 2)
+        : "Pick brand, formula and FPS to build the 13-char code.";
+      UI.clear(pvStatus);
+      pvStatus.appendChild(UI.pill(Engine.evaluateStatus(d.formulaId || d.ffs, d.packagingId || d.fps, d.kodeNA, d.tglExpire, d.discontinue)));
+    }
+    var brandOpts = [["", "(select brand)"]].concat(db.brands.map(function (b) {
+      var c = Store.customerById(b.customerId);
+      return [b.id, b.id + " - " + b.name + (c ? " (" + c.name + ")" : "")];
+    }));
+    var fOpts = [["", "(select formula)"]].concat(db.formulas.map(function (f) { return [f.id, f.id + " - " + (f.productName || f.kategori || "")]; }));
+    var pOpts = [["", "(select FPS)"]].concat(db.packagings.map(function (p) { return [p.id, p.id + " - " + (p.productName || "") + " · " + (p.volumeMl || 0) + " mL"]; }));
+    var iBrand = UI.combo(brandOpts, d.brandId, "Brand...");
+    var iFfs = UI.combo(fOpts, d.formulaId, "Formula master...");
+    var iFps = UI.combo(pOpts, d.packagingId, "FPS packaging...");
     var iDesc = UI.input({ value: d.deskripsi, placeholder: "Brand + product + size" });
     var iNa = UI.input({ class: "input mono", value: d.kodeNA, placeholder: "NA1826..." });
     var iExp = UI.input({ type: "date", value: d.tglExpire || "" });
-    [iFfs, iFps, iDesc, iNa, iExp].forEach(function (n) {
-      n.addEventListener("input", function () {
-        d.ffs = iFfs.value.trim(); d.fps = iFps.value.trim(); d.deskripsi = iDesc.value.trim();
-        d.kodeNA = iNa.value.trim(); d.tglExpire = iExp.value;
-        preview();
-      });
-    });
-    var disc = UI.checkRow("Discontinue / superseded revision (forces status Non Aktif)", d.discontinue, function (v) { d.discontinue = v; preview(); });
-
-    /* Field-level rights: fields this role does not own become read-only
-       (grey styling) with a tooltip naming the owning department; the
-       Discontinue checkbox is disabled instead (readonly n/a to boxes). */
-    var role = (Store.get().meta.user || {}).role;
-    var rights = FG_FIELD_RIGHTS[role] || { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true };
-    function lockField(inp, editable, who) {
-      if (!editable) {
-        inp.readOnly = true;
-        inp.title = "Locked for " + role + " - " + who;
-      }
+    /* UI.combo returns a wrapper div - disable its inner input, not the div. */
+    function lock(inp, editable, who) {
+      if (editable) return;
+      var target = inp.classList.contains("combo") ? inp.querySelector("input") : inp;
+      target.disabled = true; target.title = "Locked - " + who;
     }
-    lockField(iFfs, rights.ffs, "RND Formula / Regulatory own the formula code");
-    lockField(iFps, rights.fps, "RND Kemas owns the kemas code");
-    lockField(iDesc, rights.desc, "owned by the master-data roles");
-    lockField(iNa, rights.na, "Regulatory owns Kode NA");
-    lockField(iExp, rights.exp, "Regulatory owns the NA expiry date");
-    var discCb = disc.querySelector("input");
-    if (discCb && !rights.disc) { discCb.disabled = true; discCb.title = "Locked for " + role; }
-    function lk(editable) { return editable ? "" : " Locked for your role."; }
-
+    lock(iBrand, !isLegacy && isNew && rights.brand, "Marketing owns brand codes; issued codes are frozen");
+    lock(iFfs, !isLegacy && isNew && rights.ffs, "RND Formula owns the formula link; issued codes are frozen");
+    lock(iFps, !isLegacy && isNew && rights.fps, "RND Kemas owns the FPS link; issued codes are frozen");
+    lock(iDesc, rights.desc, "master-data roles");
+    lock(iNa, rights.na, "Regulatory owns Kode NA");
+    lock(iExp, rights.exp, "Regulatory owns the NA expiry date");
+    [iBrand, iFfs, iFps].forEach(function (n) { n.addEventListener("change", function () { d.brandId = iBrand.value; d.formulaId = iFfs.value; d.packagingId = iFps.value; preview(); }); });
+    [iDesc, iNa, iExp].forEach(function (n) { n.addEventListener("input", function () { d.deskripsi = iDesc.value.trim(); d.kodeNA = iNa.value.trim(); d.tglExpire = iExp.value; preview(); }); });
+    var disc = UI.checkRow("Discontinue / superseded revision (forces status Non Aktif)", d.discontinue, function (v) { d.discontinue = v; preview(); });
+    if (!rights.disc) { var cb = disc.querySelector("input"); if (cb) { cb.disabled = true; cb.title = "Locked for your role"; } }
     var body = UI.el("div", {}, [
       UI.el("div", { class: "preview-box" }, [
-        UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "F/G Product Code (auto)" }), pvKode]),
+        UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "F/G SKU Code (auto, 13 chars)" }), pvKode, pvSeg]),
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "F/G Status (auto)" }), pvStatus])
       ]),
-      fieldset("RND Formula", [UI.field("Formula Code", iFfs, "Initial formula code input by RND formula team; corrected after BPOM approval." + lk(rights.ffs))]),
-      fieldset("RND Packaging", [UI.field("FPS Packaging code", iFps, "Packaging code entered by RND Packaging team." + lk(rights.fps))]),
+      fieldset("Brand & masters", [UI.el("div", { class: "form-grid" }, [
+        UI.field("Brand", iBrand), UI.field("Formula (FFS)", iFfs), UI.field("Packaging (FPS)", iFps)
+      ])]),
       fieldset("Regulatory", [
-        UI.field("Product Description", iDesc, rights.desc ? null : "Locked for your role."),
+        UI.field("Product Description", iDesc),
         UI.el("div", { class: "form-grid" }, [
-          UI.field("NA Code (BPOM)", iNa, (rights.na ? "Leave empty while registration is in progress -> status Pending BPOM." : "") + lk(rights.na)),
-          UI.field("NA Expiry Date", iExp, (rights.exp ? "Passed date -> status flips to Non Aktif on next refresh." : "") + lk(rights.exp))
+          UI.field("NA Code (BPOM)", iNa, "Leave empty while registration is in progress -> Pending BPOM."),
+          UI.field("NA Expiry Date", iExp, "Passed date -> Non Aktif on next refresh.")
         ])
       ]),
       disc
     ]);
     preview();
-
     UI.modal({
       title: isNew ? "New Finish Good SKU" : "Edit Finish Good - " + rec.kodeFG,
-      body: body,
-      wide: true,
-      actions: [{
-        label: "Save SKU", cls: "btn-primary", onClick: function () {
-          if (!d.ffs && !d.fps) { UI.toast("Formula Code or FPS Packaging is required", "err"); return; }
-          var id = d.ffs + "|" + d.fps;
-          if (isNew && Store.fgById(id)) { UI.toast("SKU already exists: " + Engine.kodeFG(d.ffs, d.fps), "err"); return; }
-          if (!isNew && id !== rec.id && Store.fgById(id)) { UI.toast("Another SKU already uses " + Engine.kodeFG(d.ffs, d.fps), "err"); return; }
-          d.id = id;
-          Store.saveFG(d, isNew, rec ? rec.id : null);
+      body: body, wide: true,
+      actions: [{ label: "Save SKU", cls: "btn-primary", onClick: function () {
+        if (isLegacy) {
+          /* Legacy edit: desc/NA/expiry/discontinue only; code + id untouched. */
+          Store.saveFG(d, false, rec.id);
           UI.closeModal();
-          UI.toast("Saved " + Engine.kodeFG(d.ffs, d.fps) + " - status " + d.status, "ok");
+          UI.toast("Saved " + d.kodeFG + " - status " + d.status, "ok");
           App.refresh();
+          return;
         }
-      }]
+        if (!isNew) {
+          /* Issued SKU: segments stay frozen exactly as stored on the row. */
+          d.ffs = d.formulaId; d.fps = d.packagingId;
+          Store.saveFG(d, false, rec.id);
+          UI.closeModal();
+          UI.toast("Saved " + d.kodeFG + " - status " + d.status, "ok");
+          App.refresh();
+          return;
+        }
+        var s = derived();
+        if (!d.brandId) { UI.toast("Brand is required", "err"); return; }
+        if (!d.formulaId) { UI.toast("Formula is required", "err"); return; }
+        var f = Store.formulaById(d.formulaId);
+        if (!Engine.appOf(f.kategori)) { UI.toast("Formula has no category - set it on the formula master", "err"); return; }
+        if (!f.dosageForm) { UI.toast("Formula has no dosage form - set it on the formula master", "err"); return; }
+        if (!d.packagingId) { UI.toast("FPS packaging is required", "err"); return; }
+        if (!s.seq) { UI.toast("Sequence overflow (999) for this brand/app/form", "err"); return; }
+        if (!s.size) { UI.toast("Size letters exhausted for this item", "err"); return; }
+        var code = codeOf(s);
+        if (!Engine.validSkuCode(code)) { UI.toast("Invalid SKU code: " + code, "err"); return; }
+        if (Store.fgById(code)) { UI.toast("SKU already exists: " + code, "err"); return; }
+        d.app = s.app; d.form = s.form; d.seq = s.seq; d.sizeLetter = s.size; d.nettoMl = s.netto; d.rev = s.rev;
+        d.ffs = d.formulaId; d.fps = d.packagingId;
+        Store.saveFG(d, true, null);
+        UI.closeModal();
+        UI.toast("Saved " + d.kodeFG + " - status " + d.status, "ok");
+        App.refresh();
+      } }]
     });
   }
   function fieldset(legend, kids) {
@@ -391,49 +446,46 @@ window.ViewsMaster = (function () {
   }
 
   /* ---------------- Revision workflow ----------------
-     Formula / kemas code revised for the same product: instead of the
-     user re-typing a whole new SKU, one dialog supersedes the old row
-     (auto Discontinue -> Non Aktif) and creates the new revision with
-     Kode NA / Tgl Expire NA cleared (BPOM recertification) -> Pending BPOM. */
-  function fgRevision(rec) {
-    var role = (Store.get().meta.user || {}).role;
-    var rights = FG_FIELD_RIGHTS[role] || { ffs: true, fps: true };
-    var iFfs = UI.input({ class: "input mono", value: rec.ffs, placeholder: "e.g. TO01MR03" });
-    var iFps = UI.input({ class: "input mono", value: rec.fps, placeholder: "e.g. 100200100" });
-    if (!rights.ffs) { iFfs.readOnly = true; iFfs.title = "Locked for " + role; }
-    if (!rights.fps) { iFps.readOnly = true; iFps.title = "Locked for " + role; }
-    var body = UI.el("div", {}, [
-      UI.el("div", { class: "preview-box", style: "margin-bottom:12px" }, [
-        UI.el("div", { style: "font-size:12.5px;line-height:1.7" }, [
-          UI.el("div", { html: "Current SKU <span class='mono' style='font-weight:700'>" + Engine.esc(rec.kodeFG) +
-            "</span> will be marked <b>Discontinue</b> (status Non Aktif) as superseded." }),
-          UI.el("div", { html: "The new revision keeps the same Product Description but starts <b>without NA Code and NA Expiry Date</b> (BPOM recertification required) &rarr; status Pending BPOM." }),
-          UI.el("div", { html: "BOMs referencing the old SKU keep their reference; build a new BOM for the revision when ready." })
-        ])
-      ]),
-      UI.el("div", { class: "form-grid" }, [
-        UI.field("New Formula Code", iFfs, rights.ffs ? "Change this when the formula (bulk) is revised." : "Locked for your role."),
-        UI.field("New FPS Packaging code", iFps, rights.fps ? "Change this when the packaging is revised." : "Locked for your role.")
-      ])
-    ]);
+     Formula revision keeps the issued SKU code and swaps the formula link;
+     packaging revision issues a new SKU at the higher FPS revision. Both
+     clear Kode NA / Tgl Expire NA (BPOM recertification) -> Pending BPOM,
+     and packaging revision auto-discontinues the superseded row. */
+  function fgRevFormula(rec) {
+    var db = Store.get();
+    var iF = UI.combo([["", "(select formula)"]].concat(db.formulas.map(function (f) { return [f.id, f.id + " - " + (f.productName || "")]; })), rec.formulaId, "New formula...");
     UI.modal({
-      title: "New revision - " + rec.kodeFG,
-      body: body,
-      actions: [{
-        label: "Create revision", cls: "btn-primary", onClick: function () {
-          var ffs = iFfs.value.trim(), fps = iFps.value.trim();
-          if (!ffs && !fps) { UI.toast("Formula Code or FPS Kemas is required", "err"); return; }
-          if (ffs === rec.ffs && fps === rec.fps) { UI.toast("Change at least one code to create a revision", "err"); return; }
-          var id = ffs + "|" + fps;
-          if (Store.fgById(id)) { UI.toast("SKU already exists: " + Engine.kodeFG(ffs, fps), "err"); return; }
-          UI.closeModal();
-          var nu = Store.reviseFG(rec.id, ffs, fps);
-          if (nu) {
-            UI.toast("Revision " + nu.kodeFG + " created - " + rec.kodeFG + " discontinued (Pending BPOM until recertified)", "ok");
-            App.refresh();
-          }
-        }
-      }]
+      title: "Formula revision - " + rec.kodeFG,
+      body: UI.el("div", {}, [
+        UI.el("p", { class: "hint", text: "Keeps the same SKU code; swaps the formula link; clears NA (BPOM recertification). The new formula must have the same category + dosage form." }),
+        UI.field("New Formula", iF)
+      ]),
+      actions: [{ label: "Apply revision", cls: "btn-primary", onClick: function () {
+        if (!iF.value || iF.value === rec.formulaId) { UI.toast("Pick a different formula", "err"); return; }
+        var r = Store.reviseFormulaFG(rec.id, iF.value);
+        if (!r) { UI.toast("Formula not found", "err"); return; }
+        if (r.error) { UI.toast(r.error === "form" ? "New formula has no dosage form" : "New formula category/dosage form differs from the issued code", "err"); return; }
+        UI.closeModal(); App.refresh();
+        UI.toast("Formula revised - " + r.kodeFG + " Pending BPOM until recertified", "ok");
+      } }]
+    });
+  }
+  function fgRevPackaging(rec) {
+    var db = Store.get();
+    var iF = UI.combo([["", "(select FPS)"]].concat(db.packagings.map(function (p) { return [p.id, p.id + " · rev " + (p.revisi || 1) + " · " + (p.volumeMl || 0) + " mL"]; })), "", "New FPS revision...");
+    UI.modal({
+      title: "Packaging revision - " + rec.kodeFG,
+      body: UI.el("div", {}, [
+        UI.el("p", { class: "hint", text: "Creates a new SKU at the higher FPS revision (same netto); the old SKU is discontinued and NA cleared (BPOM recertification)." }),
+        UI.field("New FPS (higher revision, same netto)", iF)
+      ]),
+      actions: [{ label: "Create revision", cls: "btn-primary", onClick: function () {
+        if (!iF.value) { UI.toast("Pick the new FPS", "err"); return; }
+        var r = Store.revisePackagingFG(rec.id, iF.value);
+        if (!r) { UI.toast("FPS not found", "err"); return; }
+        if (r.error) { UI.toast(r.error === "netto" ? "Netto differs - use New SKU for a size variant" : "FPS revision must be higher than " + rec.rev, "err"); return; }
+        UI.closeModal(); App.refresh();
+        UI.toast("Revision " + r.kodeFG + " created - " + rec.kodeFG + " discontinued", "ok");
+      } }]
     });
   }
 
