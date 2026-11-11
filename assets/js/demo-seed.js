@@ -21,11 +21,11 @@ window.DemoSeed = (function () {
      stock covers most raw material, so netting raises just three purchase
      lines (RM-1001, RM-1009 and the Astoria shrink sleeve) plus six
      customer call-offs for the branded packaging. */
-  var DEMO_FG   = "TO01MR03|100200100";   /* Marieskinlian Glowing Skin Toner 100 ml */
+  var DEMO_FG   = "MSLSKLQ001A01";   /* Marieskinlian Glowing Skin Toner 100 ml */
   var CUST_ID   = "CUST-DEMO-MARIESKIN";
   var ORDER_QTY = 9500;      /* pcs */
   var NETTO     = 0.1;       /* kg per unit (100 ml toner) */
-  var BJ        = 1;         /* BOM-0001 has no formula master -> neutral density */
+  var BJ        = 1;         /* toner formula master is neutral density (BJ 1) */
   var LOSS      = 0.03;      /* 3% bulk process loss */
   var YIELD_PCS = 9310;      /* packed yield -> rendemen 98% (inside the 95-100% band) */
   var REJECTS   = 190;

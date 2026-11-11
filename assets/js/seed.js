@@ -39,34 +39,38 @@ window.Seed = (function () {
     mat("20010002", "Lakban 45 cm Clear", "PKG-INT", "pcs", 36, true, "Astoria")
   ];
 
-  function fg(ffs, fps, desc, na, exp, disc, user, time) {
+  /* Segment-driven F/G builder: the 13-char code IS the id. The old FFS-FPS
+     pair is kept as ffs/fps mirrors + a legacyCode alias so downstream lookups
+     and the nightly expiry audit keep working unchanged. */
+  function fg(brand, app, form, seq, size, rev, netto, oldFfs, oldFps, desc, na, exp, disc, user, time) {
+    var code = brand + app + form + String(seq).padStart(3, "0") + size + String(rev).padStart(2, "0");
     return {
-      id: ffs + "|" + fps,
-      ffs: ffs, fps: fps, deskripsi: desc,
-      kodeNA: na || "", tglExpire: exp || "",
-      discontinue: !!disc,
-      diubahOleh: user || "", waktuUpdate: time || "",
-      kodeFG: "", status: ""
+      id: code, ffs: oldFfs, fps: oldFps, deskripsi: desc,
+      brandId: brand, formulaId: oldFfs, packagingId: oldFps,
+      app: app, form: form, seq: seq, sizeLetter: size, nettoMl: netto, rev: rev,
+      legacyCode: oldFfs + "-" + oldFps,
+      kodeNA: na || "", tglExpire: exp || "", discontinue: !!disc,
+      diubahOleh: user || "", waktuUpdate: time || "", kodeFG: code, status: ""
     };
   }
 
   var fgs = [
-    fg("TO01MR03", "100200100", "Marieskinlian Glowing Skin Toner 100 ml", "NA18261201001", "2029-06-30", false, "regulatory@astoriaprima.co.id", "2026-07-15 09:12:00"),
-    fg("FWS01BN01FWB", "10020100", "LOVRA Brightening Facial Wash 100ml", "NA18261203166", "2029-05-18", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:02"),
-    fg("DE01RN02DC", "10020200", "LOVRA Brightening Day Cream 30 g", "NA18260105977", "2029-05-19", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:05"),
-    fg("TO01LB23RM", "10040100", "LASHBOSS Quick Mascara Remover NOT FOR SALE 1.5ml", "NA101LB23RM", "", true, "regulatory@astoriaprima.co.id", "2026-09-02 15:06:40"),
-    fg("TO01LB23RM", "10040200", "LASHBOSS Quick Mascara Remover 1.5ml", "NA18261201057", "2029-02-18", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:09"),
-    fg("SO01LB04", "10040300", "LASHBOSS Rapunzel Serum For Lash And Brow 4.5ml", "NA18251204946", "2028-06-10", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:16"),
-    fg("SH01LS11LES2", "10040400", "LASHBOSS Lash & Brow Essence Serum 5ml", "NA18261205266", "2029-08-02", false, "regulatory@astoriaprima.co.id", "2026-09-02 15:10:00"),
-    fg("DE01SKL02BC", "10050100", "SKINLYFE Skin Bright Body Cream 60ml", "NA18260104990", "2029-04-25", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:32"),
-    fg("DC01MT01W.NT", "10060100", "MUTIARA SKIN Day Cream Brightening 1000g", "NA18260106290", "2029-05-28", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:36"),
-    fg("DC01ABC02AG", "10080100", "DR. RIFKANA BEAUTYCARE Suncare For Acne 10g", "NA18250104010", "2028-03-16", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:40"),
-    fg("LC01BLO5S", "10110100", "B ERL La Belle Colorstay Lip Velvet Salsa 4g", "NA18261300890", "2029-03-16", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:47"),
-    fg("LS03SZ01MAC.A", "10130500", "SKINDOZE Plumpfull! Hydrating Tinted Lip Balm Milkshake 4g", "NA18261300418", "2029-02-08", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:37:31"),
-    fg("STCH-02", "10130800", "SKINDOZE Plumpfull! Hydrating Tinted Lip Balm Rose 4g", "NA18241302403", "2027-10-14", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:37:59"),
-    fg("LT01SS07T02.3", "10160100", "SEVEN SHEPHERD Everlasting Jelly Tint Rosse 4g", "NA18261300341", "2029-01-31", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:38:34"),
-    fg("FB01NS02T", "10170500", "BBYU BELOVED BY YOU Pearl Filter Satin Cushion N01 Oat 12g", "NA18260300561", "2029-05-27", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:39:16"),
-    fg("GC01VP01", "10190100", "ASTORIA Glow Vitamin C Serum 20 ml", "", "", false, "rnd.formula@astoriaprima.co.id", "2026-09-10 08:20:11")
+    fg("MSL", "SK", "LQ", 1, "A", 1, 100, "TO01MR03", "100200100", "Marieskinlian Glowing Skin Toner 100 ml", "NA18261201001", "2029-06-30", false, "regulatory@astoriaprima.co.id", "2026-07-15 09:12:00"),
+    fg("LVR", "CL", "LQ", 1, "A", 1, 100, "FWS01BN01FWB", "10020100", "LOVRA Brightening Facial Wash 100ml", "NA18261203166", "2029-05-18", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:02"),
+    fg("LVR", "SK", "CR", 1, "A", 1, 30, "DE01RN02DC", "10020200", "LOVRA Brightening Day Cream 30 g", "NA18260105977", "2029-05-19", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:05"),
+    fg("LBS", "CL", "LQ", 1, "A", 1, 1.5, "TO01LB23RM", "10040100", "LASHBOSS Quick Mascara Remover NOT FOR SALE 1.5ml", "NA101LB23RM", "", true, "regulatory@astoriaprima.co.id", "2026-09-02 15:06:40"),
+    fg("LBS", "CL", "LQ", 1, "A", 2, 1.5, "TO01LB23RM", "10040200", "LASHBOSS Quick Mascara Remover 1.5ml", "NA18261201057", "2029-02-18", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:09"),
+    fg("LBS", "SK", "LQ", 1, "A", 1, 4.5, "SO01LB04", "10040300", "LASHBOSS Rapunzel Serum For Lash And Brow 4.5ml", "NA18251204946", "2028-06-10", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:16"),
+    fg("LBS", "SK", "LQ", 2, "A", 1, 5, "SH01LS11LES2", "10040400", "LASHBOSS Lash & Brow Essence Serum 5ml", "NA18261205266", "2029-08-02", false, "regulatory@astoriaprima.co.id", "2026-09-02 15:10:00"),
+    fg("SKL", "BD", "CR", 1, "A", 1, 60, "DE01SKL02BC", "10050100", "SKINLYFE Skin Bright Body Cream 60ml", "NA18260104990", "2029-04-25", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:32"),
+    fg("MTR", "SK", "CR", 1, "A", 1, 1000, "DC01MT01W.NT", "10060100", "MUTIARA SKIN Day Cream Brightening 1000g", "NA18260106290", "2029-05-28", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:36"),
+    fg("DRB", "SN", "CR", 1, "A", 1, 10, "DC01ABC02AG", "10080100", "DR. RIFKANA BEAUTYCARE Suncare For Acne 10g", "NA18250104010", "2028-03-16", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:40"),
+    fg("BRL", "LP", "LS", 1, "A", 1, 4, "LC01BLO5S", "10110100", "B ERL La Belle Colorstay Lip Velvet Salsa 4g", "NA18261300890", "2029-03-16", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:36:47"),
+    fg("SKD", "LP", "LS", 1, "A", 1, 4, "LS03SZ01MAC.A", "10130500", "SKINDOZE Plumpfull! Hydrating Tinted Lip Balm Milkshake 4g", "NA18261300418", "2029-02-08", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:37:31"),
+    fg("SKD", "LP", "LS", 2, "A", 1, 4, "STCH-02", "10130800", "SKINDOZE Plumpfull! Hydrating Tinted Lip Balm Rose 4g", "NA18241302403", "2027-10-14", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:37:59"),
+    fg("SVS", "LP", "SS", 1, "A", 1, 4, "LT01SS07T02.3", "10160100", "SEVEN SHEPHERD Everlasting Jelly Tint Rosse 4g", "NA18261300341", "2029-01-31", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:38:34"),
+    fg("BBY", "FC", "CP", 1, "A", 1, 12, "FB01NS02T", "10170500", "BBYU BELOVED BY YOU Pearl Filter Satin Cushion N01 Oat 12g", "NA18260300561", "2029-05-27", false, "regulatory@astoriaprima.co.id", "2026-09-02 14:39:16"),
+    fg("AST", "SK", "LQ", 1, "A", 1, 20, "GC01VP01", "10190100", "ASTORIA Glow Vitamin C Serum 20 ml", "", "", false, "rnd.formula@astoriaprima.co.id", "2026-09-10 08:20:11")
   ];
 
   function bomItem(section, code, qtyPerUnit, qtyPerBatch, unit, supportedBy, lossPct, note) {
@@ -80,7 +84,7 @@ window.Seed = (function () {
   var boms = [{
     id: "BOM-0001",
     noBom: "01/020/BoM/VII/2026",
-    fgId: "TO01MR03|100200100",
+    fgId: "MSLSKLQ001A01",
     revision: 0,
     mulaiBerlaku: "2026-07-15",
     customer: "Marieskinlian",
@@ -120,7 +124,42 @@ window.Seed = (function () {
     { id: "MX-DJK200", name: "Double jacket kettle 200 kg", vessel: "Double jacket kettle", capacityKg: 200, active: true }
   ];
 
+  /* Brand + application full names for the derived master sample. The app
+     names are the inverse of Engine.APP_MAP, written literally so the seed
+     stays self-contained. */
+  var BRAND_NAME = {
+    MSL: "Marieskinlian", LVR: "LOVRA", LBS: "LASHBOSS", SKL: "SKINLYFE",
+    MTR: "MUTIARA", DRB: "DR. RIFKANA", BRL: "B ERL", SKD: "SKINDOZE",
+    SVS: "SEVEN SHEPHERD", BBY: "BBYU", AST: "ASTORIA"
+  };
+  var APP_NAME = {
+    EY: "Eye Makeup", FC: "Face Makeup", LP: "Lip Makeup", SK: "Skincare",
+    CL: "Cleansers & Makeup Removers", SN: "Sun Care", BD: "Body Care", HC: "Hair Care"
+  };
+
   function build() {
+    /* Derive one customer + brand per brand code, one formula per distinct
+       FFS and one FPS per distinct FPS code straight from the F/G sample, so
+       the masters and the SKUs never drift apart. */
+    var customers = [], brands = [], formulas = [], packagings = [];
+    var seenBrand = {}, seenFormula = {}, seenPack = {};
+    fgs.forEach(function (f) {
+      var cid = "CUST-" + f.brandId;
+      if (!seenBrand[f.brandId]) {
+        seenBrand[f.brandId] = true;
+        var nm = BRAND_NAME[f.brandId] || f.brandId;
+        customers.push({ id: cid, name: nm, address: "", pic: "", contact: "", terms: "Net 30" });
+        brands.push({ id: f.brandId, name: nm, customerId: cid });
+      }
+      if (!seenFormula[f.ffs]) {
+        seenFormula[f.ffs] = true;
+        formulas.push({ id: f.ffs, kategori: APP_NAME[f.app] || "", dosageForm: f.form, customerId: cid, bj: 1, productName: f.deskripsi, lines: [] });
+      }
+      if (!seenPack[f.fps]) {
+        seenPack[f.fps] = true;
+        packagings.push({ id: f.fps, volumeMl: f.nettoMl, revisi: f.rev, customerId: cid, productName: f.deskripsi, lines: [] });
+      }
+    });
     return JSON.parse(JSON.stringify({
       meta: {
         app: "Astoria F/G Master & BOM Suite",
@@ -131,6 +170,10 @@ window.Seed = (function () {
         expWarnDays: 90
       },
       materials: materials,
+      customers: customers,
+      brands: brands,
+      formulas: formulas,
+      packagings: packagings,
       fgs: fgs,
       boms: boms,
       /* Mixer catalogue mirrors the migration 002 seed so the PPIC lot plan
@@ -142,7 +185,7 @@ window.Seed = (function () {
         ts: "2026-07-15 09:12:00",
         user: "regulatory@astoriaprima.co.id", role: "Regulatory",
         action: "CREATE", entity: "Master F/G",
-        detail: "TO01MR03-100200100 (Marieskinlian Glowing Skin Toner 100 ml)"
+        detail: "MSLSKLQ001A01 (Marieskinlian Glowing Skin Toner 100 ml)"
       }]
     }));
   }
