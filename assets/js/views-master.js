@@ -242,7 +242,8 @@ window.ViewsMaster = (function () {
   function renderFGTable(body) {
     UI.clear(body);
     var db = Store.get();
-    var legacy = db.fgs.filter(function (f) { return f.id.indexOf("|") >= 0; }).length;
+    /* recode keeps the pipe id, so "still legacy" means not yet issued a 13-char code */
+    var legacy = db.fgs.filter(function (f) { return f.id.indexOf("|") >= 0 && !(f.brandId && f.seq); }).length;
     if (legacy) body.appendChild(UI.el("div", { class: "preview-box", style: "margin-bottom:10px" }, [
       UI.el("span", { text: legacy + " SKU(s) still on the legacy FFS-FPS code. " }),
       UI.btn("Open recode tool", function () { App.go("recode"); }, "btn-sm")
