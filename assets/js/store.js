@@ -14,6 +14,7 @@ window.Store = (function () {
   }
   function fixArrays() {
     db.customers = db.customers || [];
+    db.brands = db.brands || [];
     db.suppliers = db.suppliers || [];
     db.formulas = db.formulas || [];
     db.formulaLab = db.formulaLab || [];
@@ -93,11 +94,13 @@ window.Store = (function () {
   }
   function setUser(u) { db.meta.user = u; }
 
-  /* Recompute Column A (Kode FG) & Column C (Status) like the Apps Script */
+  /* Recompute Column A (Kode FG) & Column C (Status) like the Apps Script.
+     Issued 13-char codes are frozen: rows carrying brand + seq keep their
+     stored kodeFG; legacy rows re-derive the FFS-FPS formatter. */
   function refreshDerived() {
     db.fgs.forEach(function (f) {
-      f.kodeFG = Engine.kodeFG(f.ffs, f.fps);
-      f.status = Engine.evaluateStatus(f.ffs, f.fps, f.kodeNA, f.tglExpire, f.discontinue);
+      if (!(f.brandId && f.seq)) f.kodeFG = Engine.kodeFG(f.ffs, f.fps);
+      f.status = Engine.evaluateStatus(f.formulaId || f.ffs, f.packagingId || f.fps, f.kodeNA, f.tglExpire, f.discontinue);
     });
   }
 
@@ -196,8 +199,14 @@ window.Store = (function () {
     if (atEnd) arr.push(rec); else arr.unshift(rec);
   }
   function saveFG(rec, isNew, oldId) {
-    rec.kodeFG = Engine.kodeFG(rec.ffs, rec.fps);
-    rec.status = Engine.evaluateStatus(rec.ffs, rec.fps, rec.kodeNA, rec.tglExpire, rec.discontinue);
+    if (rec.brandId && rec.formulaId && rec.packagingId) {
+      rec.kodeFG = Engine.skuCode({ brand: rec.brandId, app: rec.app, form: rec.form, seq: rec.seq, size: rec.sizeLetter, rev: rec.rev });
+      if (isNew) rec.id = rec.kodeFG;
+    } else {
+      rec.kodeFG = Engine.kodeFG(rec.ffs, rec.fps);
+      if (isNew) rec.id = (rec.ffs || "") + "|" + (rec.fps || "");
+    }
+    rec.status = Engine.evaluateStatus(rec.formulaId || rec.ffs, rec.packagingId || rec.fps, rec.kodeNA, rec.tglExpire, rec.discontinue);
     rec.diubahOleh = db.meta.user.email || db.meta.user.name;
     rec.waktuUpdate = Engine.nowWIB();
     replaceRow(db.fgs, "id", oldId || rec.id, rec, false);
@@ -237,6 +246,63 @@ window.Store = (function () {
     return rec;
   }
 
+  /* Formula revision: same issued code, swap the formula link, clear NA. */
+  function reviseFormulaFG(oldId, newFormulaId) {
+    var old = fgById(oldId), f = formulaById(newFormulaId);
+    if (!old || !f) return null;
+    if (!f.dosageForm) return { error: "form" };
+    if (Engine.appOf(f.kategori) !== old.app || f.dosageForm !== old.form) return { error: "category" };
+    old.formulaId = newFormulaId;
+    old.ffs = newFormulaId;
+    old.kodeNA = ""; old.tglExpire = "";
+    saveFG(old, false, oldId);
+    audit("REVISION", "Master F/G", old.kodeFG + " formula revised to " + newFormulaId + " - NA cleared for BPOM recertification");
+    save();
+    return old;
+  }
+  /* Packaging revision: new SKU at higher FPS revisi, same netto; old superseded. */
+  function revisePackagingFG(oldId, newPackagingId) {
+    var old = fgById(oldId), pack = packagingById(newPackagingId);
+    if (!old || !pack) return null;
+    if (Number(pack.volumeMl) !== Number(old.nettoMl)) return { error: "netto" };
+    if ((Number(pack.revisi) || 1) <= old.rev) return { error: "rev" };
+    var rec = JSON.parse(JSON.stringify(old));
+    rec.packagingId = pack.id; rec.fps = pack.id;
+    rec.rev = Number(pack.revisi) || 1;
+    rec.kodeNA = ""; rec.tglExpire = ""; rec.discontinue = false;
+    old.discontinue = true;
+    saveFG(old, false, oldId);
+    saveFG(rec, true, null);
+    audit("REVISION", "Master F/G", old.kodeFG + " superseded by " + rec.kodeFG + " (packaging rev " + rec.rev + ") - NA cleared for BPOM recertification");
+    save();
+    return rec;
+  }
+  /* One-time legacy recode: freeze segments, alias the old code, keep the id. */
+  function recodeFG(id, seg) {
+    var f = fgById(id);
+    if (!f) return null;
+    f.brandId = seg.brand; f.formulaId = seg.formulaId; f.packagingId = seg.packagingId;
+    f.ffs = seg.formulaId; f.fps = seg.packagingId;
+    f.app = seg.app; f.form = seg.form; f.seq = seg.seq; f.sizeLetter = seg.size;
+    f.nettoMl = seg.netto; f.rev = seg.rev;
+    f.legacyCode = f.kodeFG;
+    f.kodeFG = Engine.skuCode({ brand: seg.brand, app: seg.app, form: seg.form, seq: seg.seq, size: seg.size, rev: seg.rev });
+    f.status = Engine.evaluateStatus(f.formulaId, f.packagingId, f.kodeNA, f.tglExpire, f.discontinue);
+    f.diubahOleh = db.meta.user.email || db.meta.user.name;
+    f.waktuUpdate = Engine.nowWIB();
+    audit("RECODE", "Master F/G", f.legacyCode + " -> " + f.kodeFG + " (" + f.deskripsi + ")");
+    if (window.Sync) Sync.mark("fg_master", f.id);
+    save();
+    return f;
+  }
+  function exportCrosswalkCSV() {
+    var rows = [["Legacy Code", "New SKU Code", "Product Description"]];
+    db.fgs.slice().sort(fgCompare).forEach(function (f) {
+      if (f.legacyCode) rows.push([f.legacyCode, f.kodeFG, f.deskripsi]);
+    });
+    Engine.download("fg-sku-crosswalk-" + Engine.todayISO() + ".csv", Engine.toCSV(rows), "text/csv;charset=utf-8");
+  }
+
   /* ---------- Master Material CRUD ---------- */
   function saveMaterial(rec, isNew, oldCode) {
     replaceRow(db.materials, "code", oldCode || rec.code, rec, true);
@@ -268,6 +334,8 @@ window.Store = (function () {
   var MASTER_CFG = {
     customer: { table: "m_customer", store: "customers", key: "id", label: "Master Customer",
       describe: function (c) { return c.id + " " + (c.name || ""); } },
+    brand: { table: "m_brand", store: "brands", key: "id", label: "Master Brand",
+      describe: function (b) { return b.id + " " + (b.name || ""); } },
     supplier: { table: "m_supplier", store: "suppliers", key: "id", label: "Master Supplier",
       describe: function (s) { return s.id + " " + (s.name || ""); } },
     formula: { table: "m_formula", store: "formulas", key: "id", label: "Master Formula (FFS)",
@@ -310,6 +378,7 @@ window.Store = (function () {
     return db[cfg.store].filter(function (x) { return String(x[cfg.key]) === String(id); })[0] || null;
   }
   function saveCustomer(rec, isNew, oldId) { return saveMaster("customer", rec, isNew, oldId); }
+  function saveBrand(rec, isNew, oldId) { return saveMaster("brand", rec, isNew, oldId); }
   function saveSupplier(rec, isNew, oldId) { return saveMaster("supplier", rec, isNew, oldId); }
   function saveFormula(rec, isNew, oldId) { return saveMaster("formula", rec, isNew, oldId); }
   function saveFormulaLab(rec, isNew, oldId) { return saveMaster("formulaLab", rec, isNew, oldId); }
@@ -318,6 +387,7 @@ window.Store = (function () {
   function savePackaging(rec, isNew, oldId) { return saveMaster("packaging", rec, isNew, oldId); }
   function saveMixer(rec, isNew, oldId) { return saveMaster("mixer", rec, isNew, oldId); }
   function deleteCustomer(id) { deleteMaster("customer", id); }
+  function deleteBrand(id) { deleteMaster("brand", id); }
   function deleteSupplier(id) { deleteMaster("supplier", id); }
   function deleteFormula(id) { deleteMaster("formula", id); }
   function deleteFormulaLab(id) { deleteMaster("formulaLab", id); }
@@ -326,6 +396,7 @@ window.Store = (function () {
   function deletePackaging(id) { deleteMaster("packaging", id); }
   function deleteMixer(id) { deleteMaster("mixer", id); }
   function customerById(id) { return masterById("customer", id); }
+  function brandById(id) { return masterById("brand", id); }
   function supplierById(id) { return masterById("supplier", id); }
   function formulaById(id) { return masterById("formula", id); }
   function formulaLabById(id) { return masterById("formulaLab", id); }
@@ -1332,11 +1403,14 @@ window.Store = (function () {
   }
 
   function exportMasterCSV() {
-    var rows = [["F/G Product Code", "Product Description", "F/G Status", "Formula Code",
-      "FPS Packaging", "NA Code", "NA Expiry Date", "Modified By", "Updated At", "Discontinue / Revision Flag"]];
+    var rows = [["F/G Product Code", "Legacy Code", "Product Description", "F/G Status", "Brand",
+      "App", "Form", "Seq", "Size", "Netto mL", "Rev", "Formula Code", "FPS Packaging",
+      "NA Code", "NA Expiry Date", "Discontinue / Revision Flag", "Modified By", "Updated At"]];
     db.fgs.slice().sort(fgCompare).forEach(function (f) {
-      rows.push([f.kodeFG, f.deskripsi, f.status, f.ffs, f.fps, f.kodeNA, f.tglExpire,
-        f.diubahOleh, f.waktuUpdate, f.discontinue ? "TRUE" : "FALSE"]);
+      rows.push([f.kodeFG, f.legacyCode || "", f.deskripsi, f.status, f.brandId || "",
+        f.app || "", f.form || "", f.seq || "", f.sizeLetter || "", f.nettoMl || "", f.rev || "",
+        f.formulaId || f.ffs, f.packagingId || f.fps, f.kodeNA, f.tglExpire,
+        f.discontinue ? "TRUE" : "FALSE", f.diubahOleh, f.waktuUpdate]);
     });
     Engine.download("master-fg-list-" + Engine.todayISO() + ".csv", Engine.toCSV(rows), "text/csv;charset=utf-8");
   }
@@ -1348,8 +1422,11 @@ window.Store = (function () {
     matMap: matMap, fgById: fgById, bomByFg: bomByFg,
     fgCompare: fgCompare, fgRecentCompare: fgRecentCompare, fgDescCompare: fgDescCompare,
     saveFG: saveFG, deleteFG: deleteFG, reviseFG: reviseFG,
+    reviseFormulaFG: reviseFormulaFG, revisePackagingFG: revisePackagingFG,
+    recodeFG: recodeFG, exportCrosswalkCSV: exportCrosswalkCSV,
     saveMaterial: saveMaterial, deleteMaterial: deleteMaterial,
     saveCustomer: saveCustomer, deleteCustomer: deleteCustomer, customerById: customerById,
+    saveBrand: saveBrand, deleteBrand: deleteBrand, brandById: brandById,
     saveSupplier: saveSupplier, deleteSupplier: deleteSupplier, supplierById: supplierById,
     saveFormula: saveFormula, deleteFormula: deleteFormula, formulaById: formulaById,
     saveFormulaLab: saveFormulaLab, deleteFormulaLab: deleteFormulaLab, formulaLabById: formulaLabById,
