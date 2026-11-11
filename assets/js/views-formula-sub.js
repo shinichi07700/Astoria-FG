@@ -1,13 +1,13 @@
 /* ============================================================
-   VIEWS - Master Formula submodules: Product Specification,
-   Test Result, Machine Setup. Each is a list keyed by Formula
-   Code (the doc "Kode", never the FFS document number) with its
-   own n8n PDF import (preview before save). Records stay Draft
-   until the approval chain lands; edit rights follow Master
-   Formula (RND Formula) until HRIS positions arrive.
+   VIEWS - Master Formula parts: Product Specification, Test
+   Result, Machine Setup. Each is keyed by Formula Code (the doc
+   "Kode", never the FFS document number) and edited as a tab
+   inside the Master Formula wide modal, with its own inline PDF
+   import. Records stay Draft until the approval chain lands;
+   edit rights follow Master Formula (RND Formula).
 
-   The submodules are the single editing source for QC data. On
-   save they write a cache back to the core formula (pH range,
+   The parts are the single editing source for QC data. On save
+   they write a cache back to the core formula (pH range,
    viscosity, stability lamps) so the Master Formula list, BOM,
    QA and netting keep reading those fields without change. BJ
    stays core-editable (netting) and is NOT written back here.
@@ -24,29 +24,21 @@ window.ViewsFormulaSub = (function () {
   };
   var STAB_OPTS = [["-", "-"], ["Running", "Running"], ["Pass", "Pass"], ["Fail", "Fail"]];
   var CONDS = ["TK", "TKUL", "T50", "TM"];
-  var LAMP = { Pass: "pass", Running: "run", Fail: "fail", "-": "none" };
   /* Machine parameter channels (FFS tab 6). Units are fixed per channel;
      the set value is free text so ranges ("75–80") survive the import. */
   var CHANNELS = [
-    ["suhu", "Suhu", "\u00b0C"],
-    ["homogenizer", "Kec. Homogenizer", "rpm"],
-    ["disperser", "Kec. Disperser", "rpm"],
-    ["mixer", "Kec. Mixer", "Hz"],
-    ["scraper", "Kec. Scraper", "Hz"],
-    ["time", "Lama", "menit"]
+    ["suhu", "Temperature", "\u00b0C"],
+    ["homogenizer", "Homogenizer speed", "rpm"],
+    ["disperser", "Disperser speed", "rpm"],
+    ["mixer", "Mixer speed", "Hz"],
+    ["scraper", "Scraper speed", "Hz"],
+    ["time", "Duration", "min"]
   ];
-  var TIME_TYPES = ["Pengadukan", "Mixing", "Pendinginan"];
-  var filters = { lab: "", stab: "", machine: "" };
+  var TIME_TYPES = ["Stirring", "Mixing", "Cooling"];
+  var TT_LEGACY = { "Pengadukan": "Stirring", "Pendinginan": "Cooling" };
 
-  function canEdit() { return RBAC.canEditMaster("formulas"); }
-  function esc(s) { return Engine.esc(s); }
   function formulaOf(id) { return Store.formulaById(id); }
   function mixerOf(id) { return (Store.get().mixers || []).filter(function (m) { return m.id === id; })[0]; }
-  function mixerName(id) { var m = mixerOf(id); return m ? (m.name || m.id) : (id || ""); }
-  function prodLabel(id) {
-    var f = formulaOf(id);
-    return f ? (f.productName || f.id) + (f.variant ? " (" + f.variant + ")" : "") : "(Formula not in master)";
-  }
   function stamp(d) {
     d.updated = Engine.todayISO();
     d.by = (Store.get().meta.user || {}).name || "User";
@@ -72,12 +64,6 @@ window.ViewsFormulaSub = (function () {
     });
     CONDS.forEach(function (c) { if (best[c]) out[c] = best[c].status || "-"; });
     return out;
-  }
-  function lamps(rec) {
-    var r = stabRollup(rec);
-    return CONDS.map(function (c) {
-      return '<span class="ffs-lamp ' + (LAMP[r[c]] || "none") + '" title="' + c + ': ' + esc(r[c]) + '"></span>';
-    }).join(" ");
   }
 
   /* Write-back QC cache: keep the core formula's pH / viscosity / stability
@@ -106,257 +92,10 @@ window.ViewsFormulaSub = (function () {
   }
 
   function newParamSet() {
-    return { mixerId: "", batchLabel: "", suhu: "", homogenizer: "", disperser: "", mixer: "", scraper: "", time: "", timeType: "Pengadukan" };
+    return { mixerId: "", batchLabel: "", suhu: "", homogenizer: "", disperser: "", mixer: "", scraper: "", time: "", timeType: "Stirring" };
   }
   function newStep() {
     return { materials: [], instruction: "", vessel: "", ccp: false, ccpNote: "", outputLabel: "", params: [newParamSet()] };
-  }
-  /* Condense a step's machine param-sets for the import preview. */
-  function paramSummary(st) {
-    return (st.params || []).map(function (ps) {
-      var bits = [];
-      if (ps.mixerId) bits.push(mixerName(ps.mixerId));
-      if (ps.batchLabel) bits.push(ps.batchLabel);
-      CHANNELS.forEach(function (ch) { if (ps[ch[0]]) bits.push(ch[1] + " " + ps[ch[0]] + " " + ch[2]); });
-      if (ps.timeType) bits.push(ps.timeType);
-      return bits.join(" · ");
-    }).filter(Boolean).join("   |   ");
-  }
-
-  /* ---------------- list ---------------- */
-  function render(kind, host) {
-    var K = KINDS[kind], db = Store.get();
-    var cfg = Store.ocrConfig(K.cfg);
-    var ready = OCRImport.configuredCfg(cfg);
-    var edit = canEdit();
-    /* .ffs-page scopes the approved lamp / mono styles reused here */
-    var wrap = UI.el("div", { class: "ffs-page" });
-    host.appendChild(wrap);
-
-    var bar = UI.el("div", { class: "btn-row", style: "margin:0 0 12px;align-items:center" });
-    var search = UI.input({ type: "search", placeholder: "Search Formula Code or product…", value: filters[kind], style: "max-width:280px" });
-    search.addEventListener("input", function () { filters[kind] = search.value.trim(); draw(); });
-    bar.appendChild(search);
-    bar.appendChild(UI.el("span", { class: "sub-dot" + (ready ? "" : " off"), html: "<i></i>n8n: " + esc(K.cfg) + (ready ? " configured" : " not set") }));
-    var count = UI.el("span", { class: "tag", style: "margin-left:auto" });
-    bar.appendChild(count);
-    if (edit && ready) bar.appendChild(UI.btn("Import PDF", function () { pickPdf(kind); }, ""));
-    if (edit) bar.appendChild(UI.btn("+ New Entry", function () { editor(kind, null); }, "btn-primary"));
-    wrap.appendChild(bar);
-
-    var tableHost = UI.el("div");
-    wrap.appendChild(tableHost);
-    if (!edit) wrap.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
-      text: "Read-only for your role - the formula submodules are maintained by RND Formula." }));
-
-    function rows() {
-      var q = filters[kind].toLowerCase();
-      return db[K.store].filter(function (r) {
-        return !q || (r.id + " " + prodLabel(r.id)).toLowerCase().indexOf(q) >= 0;
-      }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
-    }
-    function statusPill(r) { return '<span class="pill">' + esc(r.status || "Draft") + '</span>'; }
-    function upd(r) { return esc(r.updated || "-") + "<br>" + esc(r.by || ""); }
-    function codeCol(r) { return '<span class="mono">' + esc(r.id) + "</span>"; }
-
-    function draw() {
-      var list = rows();
-      count.textContent = list.length + " / " + db[K.store].length + " records";
-      var cols;
-      if (kind === "lab") cols = [
-        { label: "Formula Code", render: codeCol },
-        { label: "Product", render: function (r) { return esc(prodLabel(r.id)); } },
-        { label: "Spec params", render: function (r) { return String((r.specs || []).length); } },
-        { label: "Expiry", render: function (r) { return esc(r.expiry || "-"); } },
-        { label: "Storage", render: function (r) { return esc(r.storageTemp || "-"); } },
-        { label: "Status", render: statusPill },
-        { label: "Updated", render: upd }
-      ];
-      else if (kind === "stab") cols = [
-        { label: "Formula Code", render: codeCol },
-        { label: "Product", render: function (r) { return esc(prodLabel(r.id)); } },
-        { label: "Stability ref", render: function (r) { return esc(r.stabRef || "-"); } },
-        { label: "TK / TKUL / T50 / TM", cls: "sub-lamps", render: lamps },
-        { label: "Cycle", render: function (r) { return "W" + (r.weeksObserved || 0) + " / W" + (r.weeksTotal || 0); } },
-        { label: "Status", render: statusPill },
-        { label: "Updated", render: upd }
-      ];
-      else cols = [
-        { label: "Formula Code", render: codeCol },
-        { label: "Product", render: function (r) { return esc(prodLabel(r.id)); } },
-        { label: "Equipment", render: function (r) { return esc((r.equipment || []).join(", ") || "-"); } },
-        { label: "Phases", render: function (r) { return (r.phases || []).map(function (p) { return esc(p.name || "-"); }).join(" → ") || "-"; } },
-        { label: "Status", render: statusPill },
-        { label: "Updated", render: upd }
-      ];
-      UI.clear(tableHost);
-      tableHost.appendChild(UI.table(cols, list, {
-        emptyText: "No " + K.title.toLowerCase() + " records yet - import a PDF or add one manually.",
-        onRowClick: function (r) { editor(kind, r); }
-      }));
-    }
-    draw();
-  }
-
-  /* ---------------- import: pick -> parse -> preview -> confirm ---------------- */
-  function pickPdf(kind) {
-    var inp = UI.el("input", { type: "file", accept: ".pdf,application/pdf", style: "display:none" });
-    document.body.appendChild(inp);
-    inp.addEventListener("change", function () {
-      if (inp.files && inp.files[0]) { var f = inp.files[0]; inp.remove(); runImport(kind, f); }
-      else inp.remove();
-    });
-    inp.click();
-  }
-  function runImport(kind, file) {
-    var K = KINDS[kind], cfg = Store.ocrConfig(K.cfg);
-    var sub = UI.el("p", { style: "margin:8px 0 0;font-size:12px;color:var(--muted);text-align:center" },
-      ["Parsing " + file.name + " with n8n… usually 10–30 s"]);
-    UI.modal({ title: "Import " + K.title + " from PDF", body: UI.el("div", { style: "padding:8px 0" }, [UI.el("div", { class: "spinner" }), sub]) });
-    var t0 = Date.now();
-    var timer = setInterval(function () {
-      sub.textContent = "Parsing " + file.name + " with n8n… " + Math.round((Date.now() - t0) / 1000) + " s (limit 120 s)";
-    }, 1000);
-    function done() { clearInterval(timer); UI.closeModal(); }
-    OCRImport.parsePdf(file, cfg).then(function (payload) {
-      var res = OCRImport[K.map](payload, Store.get());
-      done();
-      preview(kind, res, (payload.document && payload.document.fileName) || file.name);
-    }, function (err) {
-      done();
-      UI.toast((err && err.message) || "Import failed", "err");
-    });
-  }
-
-  function previewRows(kind, d) {
-    if (kind === "lab") return [
-      ["Specification parameters", (d.specs || []).map(function (s) {
-        return [s.parameter || "(unnamed)", (s.std || "") + (s.method ? "  [" + s.method + "]" : "")];
-      })],
-      ["Document", [["Expiry / shelf life", d.expiry], ["SPR / lab ref", d.sprRef], ["Storage condition", d.storageTemp], ["Note", d.note]]]
-    ];
-    if (kind === "stab") return [
-      ["References", [["Panel / sensory", d.panelRef], ["Stability", d.stabRef], ["Microbiology", d.microRef], ["Compatibility", d.compatRef]]],
-      ["Study", [["Start date", d.startDate], ["Protocol", d.protocol],
-        ["Weeks observed / total", (d.weeksObserved || 0) + " / " + (d.weeksTotal || 0)], ["Note", d.note]]],
-      ["Observations", (d.obs || []).map(function (o) {
-        return [o.cond + (o.week ? " · W" + o.week : ""), (o.status || "-") + (o.note ? " — " + o.note : "")];
-      })]
-    ];
-    return [
-      ["Setup", [["Equipment", (d.equipment || []).join(", ")], ["Vacuum", d.vacuum], ["Note", d.note]]],
-      ["Work instruction (→ BMR)", (d.phases || []).map(function (p) {
-        var stepTxt = (p.steps || []).map(function (st) {
-          var bits = [];
-          if (st.vessel) bits.push(st.vessel);
-          if ((st.materials || []).length) bits.push(st.materials.join(", "));
-          if (st.ccp) bits.push("CCP" + (st.ccpNote ? ": " + st.ccpNote : ""));
-          var ps = paramSummary(st);
-          if (ps) bits.push(ps);
-          if (st.instruction) bits.push(st.instruction);
-          return bits.filter(Boolean).join(" — ");
-        }).filter(Boolean).join("   ▸   ");
-        return [p.name || "(unnamed phase)", stepTxt || "(no steps)"];
-      })]
-    ];
-  }
-  function preview(kind, res, fileName) {
-    var K = KINDS[kind], d = res.draft;
-    var body = UI.el("div");
-    var banner = [UI.el("div", {}, ["Imported from " + fileName + " — check every value before saving. Nothing is written until you confirm."])];
-    if (res.existing) banner.push(UI.el("div", {}, [K.title + " record " + d.id + " already exists — saving will overwrite it."]));
-    if (res.warnings.length) banner.push(UI.el("ul", {}, res.warnings.map(function (w) { return UI.el("li", {}, [w]); })));
-    body.appendChild(UI.el("div", { class: "import-banner" }, banner));
-    body.appendChild(UI.el("div", { style: "margin:0 0 12px" }, [
-      UI.el("span", { class: "sub-match " + (formulaOf(d.id) ? "hit" : "miss"),
-        text: (formulaOf(d.id) ? "✓ Formula " + d.id + " matched" : "✕ Formula " + (d.id || "(blank)") + " not in master") })
-    ]));
-    previewRows(kind, d).forEach(function (sec) {
-      if (!sec[1].length) return;
-      body.appendChild(UI.el("div", { class: "sub-sec", text: sec[0] }));
-      var tbl = UI.el("table", { class: "tbl sub-preview" });
-      tbl.appendChild(UI.el("thead", {}, [UI.el("tr", {}, [UI.el("th", { text: "Field" }), UI.el("th", { text: "Parsed value" })])]));
-      var tb = UI.el("tbody");
-      sec[1].forEach(function (row) {
-        var blank = row[1] === "" || row[1] == null;
-        tb.appendChild(UI.el("tr", {}, [
-          UI.el("td", { text: String(row[0]) }),
-          UI.el("td", { class: blank ? "sub-blank" : "mono", text: blank ? "(blank — not in document)" : String(row[1]) })
-        ]));
-      });
-      tbl.appendChild(tb);
-      body.appendChild(tbl);
-    });
-    UI.modal({
-      title: "Preview — " + K.title, body: body, wide: true,
-      actions: [
-        { label: "Edit values", onClick: function () { UI.closeModal(); editor(kind, res.existing, { importData: d, importInfo: { fileName: fileName, warnings: res.warnings } }); } },
-        { label: "Confirm & Save as Draft", cls: "btn-primary", onClick: function () {
-            if (!d.id) { UI.toast("Formula Code is required - use Edit values to pick it", "err"); return; }
-            stamp(d);
-            Store[K.save](d, !res.existing, res.existing ? res.existing.id : null);
-            syncCoreCache(kind, d);
-            Store.audit("IMPORT", K.entity, d.id + " confirmed from " + fileName);
-            UI.closeModal(); App.refresh();
-            UI.toast(K.title + " " + d.id + " saved as Draft", "ok");
-          } }
-      ]
-    });
-  }
-
-  /* ---------------- editors ---------------- */
-  function formulaCombo(value) {
-    var opts = Store.get().formulas.slice().sort(function (a, b) { return a.id.localeCompare(b.id); })
-      .map(function (f) { return [f.id, f.id + " - " + (f.productName || f.kategori || "")]; });
-    return UI.combo(opts, value, "Pick Formula Code…");
-  }
-  function editor(kind, rec, opts) {
-    if (!canEdit()) { UI.toast("Formula submodules are read-only for your role", "err"); return; }
-    opts = opts || {};
-    var K = KINDS[kind], isNew = !rec;
-    var d = Object.assign(defaults(kind), rec || {});
-    if (opts.importData) Object.keys(opts.importData).forEach(function (k) { d[k] = opts.importData[k]; });
-    var iId = formulaCombo(d.id);
-    var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
-    iNote.value = d.note || "";
-    var body = UI.el("div");
-    if (opts.importInfo) {
-      var banner = [UI.el("div", {}, ["Imported from " + opts.importInfo.fileName + " — check every value before saving."])];
-      if (opts.importInfo.warnings && opts.importInfo.warnings.length) {
-        banner.push(UI.el("ul", {}, opts.importInfo.warnings.map(function (w) { return UI.el("li", {}, [w]); })));
-      }
-      body.appendChild(UI.el("div", { class: "import-banner" }, banner));
-    }
-    var grid = UI.el("div", { class: "form-grid" }, [UI.field("Formula Code", iId, "Must reference a Master Formula code (the doc Kode).")]);
-    body.appendChild(grid);
-
-    var collect = function () { d.id = iId.value; d.note = iNote.value.trim(); };
-    var extra = kind === "lab" ? buildSpec(body, d) : kind === "stab" ? buildTest(body, d) : buildMachine(body, d);
-    var collectAll = function () { collect(); extra(); };
-    body.appendChild(UI.field("Note", iNote));
-
-    var actions = [{
-      label: "Save as Draft", cls: "btn-primary", onClick: function () {
-        collectAll();
-        if (!d.id) { UI.toast("Formula Code is required", "err"); return; }
-        if (!Store.formulaById(d.id)) { UI.toast("Formula " + d.id + " not in Master Formula - create the composition first", "err"); return; }
-        d.status = "Draft";
-        stamp(d);
-        Store[K.save](d, isNew, rec ? rec.id : null);
-        syncCoreCache(kind, d);
-        if (opts.importInfo) Store.audit("IMPORT", K.entity, d.id + " confirmed from " + opts.importInfo.fileName);
-        UI.closeModal(); App.refresh();
-        UI.toast(K.title + " " + d.id + " saved", "ok");
-      }
-    }];
-    if (!isNew) actions.unshift({
-      label: "Delete", cls: "btn-danger", onClick: function () {
-        UI.confirmDialog("Delete " + K.title.toLowerCase() + " record " + rec.id + "?", function () {
-          Store[K.del](rec.id); UI.closeModal(); App.refresh();
-        });
-      }
-    });
-    UI.modal({ title: (isNew ? "New " : "Edit ") + K.title + " — " + (rec ? rec.id : "(imported)"), body: body, wide: true, actions: actions });
   }
   function defaults(kind) {
     if (kind === "lab") return { id: "", specs: [], expiry: "", sprRef: "", storageTemp: "", note: "", status: "Draft" };
@@ -520,7 +259,7 @@ window.ViewsFormulaSub = (function () {
         if (!p.steps) p.steps = [];
         var phaseBox = UI.el("div", { class: "sub-phase" });
         var head = UI.el("div", { class: "sub-ph-head" });
-        var iName = UI.input({ value: p.name || "", placeholder: "Phase name, e.g. Tahap I — Fase Premix", style: "flex:1;font-weight:600" });
+        var iName = UI.input({ value: p.name || "", placeholder: "Phase name, e.g. Phase I — Oil Phase", style: "flex:1;font-weight:600" });
         iName.addEventListener("input", function () { p.name = iName.value; });
         head.appendChild(iName);
         head.appendChild(UI.btn("× phase", function () { d.phases.splice(pi, 1); drawPhases(); }, "btn-danger btn-sm"));
@@ -591,7 +330,8 @@ window.ViewsFormulaSub = (function () {
                   UI.el("td", { text: label }), UI.el("td", {}, [iV]), UI.el("td", { text: unit, class: "mono" })
                 ]));
               });
-              var iTt = UI.select(TIME_TYPES.map(function (t) { return [t, t]; }), ps.timeType || "Pengadukan");
+              ps.timeType = TT_LEGACY[ps.timeType] || ps.timeType || "Stirring";
+              var iTt = UI.select(TIME_TYPES.map(function (t) { return [t, t]; }), ps.timeType);
               iTt.addEventListener("change", function () { ps.timeType = iTt.value; });
               tb.appendChild(UI.el("tr", {}, [
                 UI.el("td", { text: "Time type" }), UI.el("td", {}, [iTt]), UI.el("td", { text: "—" })
@@ -629,5 +369,41 @@ window.ViewsFormulaSub = (function () {
     return function () { d.vacuum = iVac.value.trim(); };
   }
 
-  return { render: render, KINDS: KINDS };
+  /* ---------------- unified wide-modal support ----------------
+     panel() builds a submodule body (no Formula Code picker - the code
+     is fixed by the selected formula) and returns a collector, so the
+     Master Formula wide modal can host it as a tab. parseImport() maps a
+     PDF without opening a modal (a nested modal would close the editor). */
+  function panel(kind, d, opts) {
+    opts = opts || {};
+    var body = UI.el("div", { class: "wm-panel" });
+    if (opts.importInfo) {
+      var banner = [UI.el("div", {}, ["Imported from " + opts.importInfo.fileName + " — check every value before saving."])];
+      if (opts.importInfo.warnings && opts.importInfo.warnings.length) {
+        banner.push(UI.el("ul", {}, opts.importInfo.warnings.map(function (w) { return UI.el("li", {}, [w]); })));
+      }
+      body.appendChild(UI.el("div", { class: "import-banner" }, banner));
+    }
+    var extra = kind === "lab" ? buildSpec(body, d) : kind === "stab" ? buildTest(body, d) : buildMachine(body, d);
+    var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
+    iNote.value = d.note || "";
+    body.appendChild(UI.field("Note", iNote));
+    return { body: body, collect: function () { d.note = iNote.value.trim(); extra(); } };
+  }
+  function parseImport(kind, file, onDone, onErr) {
+    var K = KINDS[kind], cfg = Store.ocrConfig(K.cfg);
+    OCRImport.parsePdf(file, cfg).then(function (payload) {
+      var res = OCRImport[K.map](payload, Store.get());
+      onDone(res, (payload.document && payload.document.fileName) || file.name);
+    }, function (err) { onErr(err); });
+  }
+  function hasContent(kind, d) {
+    if (!d) return false;
+    if (kind === "lab") return (d.specs || []).length > 0 || !!(d.expiry || d.sprRef || d.storageTemp);
+    if (kind === "stab") return (d.obs || []).length > 0 || !!(d.panelRef || d.stabRef || d.microRef || d.compatRef || d.startDate || d.protocol);
+    return (d.phases || []).length > 0 || (d.equipment || []).length > 0 || !!(d.vacuum || d.mixerId);
+  }
+
+  return { KINDS: KINDS, defaults: defaults, panel: panel,
+    syncCoreCache: syncCoreCache, parseImport: parseImport, hasContent: hasContent, stamp: stamp };
 })();

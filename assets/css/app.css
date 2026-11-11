@@ -873,6 +873,39 @@ body.login-mode .topbar-right { display: none; }
 }
 .import-banner ul { margin: 6px 0 0; padding-left: 18px; }
 
+/* ---------- Master Formula wide editor (Option B): four tabs in one modal ---------- */
+.wm { display: flex; flex-direction: column; }
+.wm-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  border-bottom: 1.5px solid var(--line-strong); margin-bottom: 2px;
+}
+.wm-tab {
+  appearance: none; border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px 11px; font: 600 13px var(--font); color: var(--muted);
+  border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+  border-radius: 7px 7px 0 0;
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.wm-tab:hover { color: var(--accent-dark); background: var(--accent-soft); }
+.wm-tab.on { color: var(--accent-dark); border-bottom-color: var(--accent); }
+.wm-tab .ok { color: var(--green); font-size: 11px; line-height: 1; }
+.wm-tab .miss { color: var(--faint); font-size: 11px; line-height: 1; }
+.wm-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 2px; }
+.wm-toolbar .sp { margin-left: auto; }
+.wm-code {
+  font: 600 13.5px var(--mono); color: var(--accent-dark);
+  background: var(--accent-soft); border: 1px solid var(--line-strong);
+  padding: 4px 10px; border-radius: 7px;
+}
+.wm-body { min-height: 220px; }
+.wm-panel { animation: wmIn .18s ease-out; }
+@keyframes wmIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.wm-importing {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 54px 18px; color: var(--muted); font-size: 13px; text-align: center;
+}
+
 /* ============================================================
    MASTER FORMULA — Spec Sheet Stack (approved mockup port)
    Scoped under .ffs-page to avoid conflicts with other views.

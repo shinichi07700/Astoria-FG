@@ -881,7 +881,6 @@ window.ViewsMaster = (function () {
      urutan, BJ, pH range, viscosity and the four stability tests. The recipe
      percentages themselves live on the production BOM's FORMULA lines. */
   var formulaFilter = { q: "", kat: "", stab: "", page: 1, rpp: 10, open: null };
-  var ffsTab = "comp";
   var FFS_CATS = ["Lip Makeup", "Face Makeup", "Eye Makeup", "Skincare", "Cleansers & Makeup Removers", "Sun Care", "Body Care", "Hair Care"];
   var FFS_STAB = { "Pass": { cls: "pass", word: "PASS" }, "Running": { cls: "run", word: "RUNNING" }, "Fail": { cls: "fail", word: "FAIL" }, "-": { cls: "none", word: "NOT SET" } };
   var FFS_TESTS = [["stabTk", "TK", "Thermal cycle"], ["stabTkul", "TKUL", "UV cycle"], ["stabT50", "T50", "50\u00b0C oven"], ["stabTm", "TM", "Real-time"]];
@@ -898,42 +897,13 @@ window.ViewsMaster = (function () {
   function formulas(root) {
     var db = Store.get();
     var canEdit = RBAC.canEditMaster("formulas");
-    root.appendChild(UI.pageHead("Master Formula (FFS)",
-      "FFS = composition + product specification + test result + machine setup. Each submodule imports from its own n8n webhook (Settings & Data); records stay Draft until the approval chain lands. Maintained by RND Formula.",
+    root.appendChild(UI.pageHead("Master Formula",
+      "Composition + product specification + test result + machine setup, keyed by Formula Code. Open a formula and choose Edit to work on all four parts in one window; each part imports from its own webhook (Settings & Data). Records stay Draft until the approval chain lands. Maintained by RND Formula.",
       []));
 
-    /* Submenu tabs: Composition keeps the original spec-sheet page; the
-       three parameter submodules live in views-formula-sub.js. */
-    var tabBar = UI.el("div", { class: "ffs-tabs", role: "tablist" });
-    var panel = UI.el("div");
-    root.appendChild(tabBar);
-    root.appendChild(panel);
-    var FFS_TABS = [["comp", "Composition"], ["lab", "Product Specification"], ["stab", "Test Result"], ["machine", "Machine Setup"]];
-    var FFS_SUB_STORE = { lab: "formulaLab", stab: "formulaStab", machine: "formulaMachine" };
-    function drawTabs() {
-      UI.clear(tabBar);
-      FFS_TABS.forEach(function (t) {
-        var n = t[0] === "comp" ? db.formulas.length : db[FFS_SUB_STORE[t[0]]].length;
-        tabBar.appendChild(UI.el("button", {
-          class: "ffs-tab", role: "tab", "aria-selected": ffsTab === t[0] ? "true" : "false",
-          onclick: function () { ffsTab = t[0]; showTab(); }
-        }, [t[1], UI.el("span", { class: "ffs-tab-n", text: String(n) })]));
-      });
-    }
-    function showTab() {
-      drawTabs();
-      UI.clear(panel);
-      if (ffsTab === "comp") renderComp(panel);
-      else ViewsFormulaSub.render(ffsTab, panel);
-    }
-
     function renderComp(host) {
-      var headBtns = [];
-      if (canEdit && window.OCRImport && OCRImport.configuredCfg(Store.ocrConfig("formula"))) {
-        headBtns.push(UI.btn("Import from PDF", importFormulaPdf, ""));
-      }
-      if (canEdit) headBtns.push(UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary"));
-      if (headBtns.length) host.appendChild(UI.el("div", { class: "btn-row", style: "margin:0 0 12px" }, headBtns));
+      if (canEdit) host.appendChild(UI.el("div", { class: "btn-row", style: "margin:0 0 12px" },
+        [UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary")]));
       var wrap = UI.el("div", { class: "ffs-page" });
       host.appendChild(wrap);
 
@@ -1042,27 +1012,27 @@ window.ViewsMaster = (function () {
       if (tbody) tbody.innerHTML = slice.map(ffsRow).join("");
     }
 
-    var catOpts = '<option value="">Kategori: all</option>' + FFS_CATS.map(function (c) { return '<option value="' + ffsEsc(c) + '">' + ffsEsc(c) + '</option>'; }).join("");
+    var catOpts = '<option value="">Category: all</option>' + FFS_CATS.map(function (c) { return '<option value="' + ffsEsc(c) + '">' + ffsEsc(c) + '</option>'; }).join("");
     var stabOpts = '<option value="">Stability: all</option><option value="fail">Has Fail</option><option value="run">Has Running</option><option value="pass">All Pass</option><option value="open">Not complete</option>';
     var chevSvg = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
     wrap.innerHTML =
       '<div class="ffs-toolbar">' +
         '<span class="ffs-search"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search formula code / customer / product\u2026" aria-label="Search formulas"></span>' +
-        '<span class="ffs-sel"><select aria-label="Filter by kategori">' + catOpts + '</select>' + chevSvg + '</span>' +
+        '<span class="ffs-sel"><select aria-label="Filter by category">' + catOpts + '</select>' + chevSvg + '</span>' +
         '<span class="ffs-sel"><select aria-label="Filter by stability">' + stabOpts + '</select>' + chevSvg + '</span>' +
         '<span class="ffs-count"></span>' +
       '</div>' +
       '<section class="ffs-sheet"><div class="ffs-scroll"><table class="ffs"><thead>' +
         '<tr><th class="ffs-col ffs-span2" rowspan="2">Formula Code</th><th class="ffs-grp" colspan="3">Identity</th><th class="ffs-grp" colspan="4">Technical</th><th class="ffs-grp" colspan="4">Stability</th><th class="ffs-span2" rowspan="2"></th></tr>' +
-        '<tr><th class="ffs-col">Kategori</th><th class="ffs-col">Customer</th><th class="ffs-col">Product <small>(variant)</small></th><th class="ffs-col">BJ <small>(g/mL)</small></th><th class="ffs-col">pH <small>(25\u00b0C)</small></th><th class="ffs-col">Viscosity <small>(cP)</small></th><th class="ffs-col">Lines</th><th class="ffs-col">TK</th><th class="ffs-col">TKUL</th><th class="ffs-col">T50</th><th class="ffs-col">TM</th></tr>' +
+        '<tr><th class="ffs-col">Category</th><th class="ffs-col">Customer</th><th class="ffs-col">Product <small>(variant)</small></th><th class="ffs-col">BJ <small>(g/mL)</small></th><th class="ffs-col">pH <small>(25\u00b0C)</small></th><th class="ffs-col">Viscosity <small>(cP)</small></th><th class="ffs-col">Lines</th><th class="ffs-col">TK</th><th class="ffs-col">TKUL</th><th class="ffs-col">T50</th><th class="ffs-col">TM</th></tr>' +
       '</thead><tbody></tbody></table></div>' +
       '<div class="ffs-empty" hidden><svg width="44" height="44" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.3L4.8 18a2.4 2.4 0 0 0 2.1 3.5h10.2a2.4 2.4 0 0 0 2.1-3.5L14 9.3V3M7.5 15h9"/></svg><h2>No formulas match</h2><p>Adjust the search or filters to see the master list again.</p><button class="btn btn-sm ffs-clear" type="button">Clear search &amp; filters</button></div>' +
       '<footer class="ffs-foot"><span class="ffs-showing"></span><nav class="ffs-pager" aria-label="Pagination"></nav><label class="ffs-rpp">Rows <span class="ffs-sel"><select><option>10</option><option>25</option><option>50</option></select>' + chevSvg + '</span></label></footer>' +
       '</section>';
 
     var searchInput = wrap.querySelector(".ffs-search input");
-    var katSel = wrap.querySelector('[aria-label="Filter by kategori"]');
+    var katSel = wrap.querySelector('[aria-label="Filter by category"]');
     var stabSel = wrap.querySelector('[aria-label="Filter by stability"]');
     var rppSel = wrap.querySelector(".ffs-rpp select");
     searchInput.value = formulaFilter.q;
@@ -1113,54 +1083,7 @@ window.ViewsMaster = (function () {
     if (!canEdit) wrap.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
       text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the formula master is maintained by RND Formula." }));
     }
-    showTab();
-  }
-
-  /* ------------------------------------------------------------------
-     Import from PDF (n8n webhook -> OpenAI -> prefilled editor).
-     Visible only when window.ASTORIA_OCR is configured AND the user
-     may edit Master Formula.
-     ------------------------------------------------------------------ */
-  function importFormulaPdf() {
-    var inp = UI.el("input", { type: "file", accept: ".pdf,application/pdf", style: "display:none" });
-    document.body.appendChild(inp);
-    inp.addEventListener("change", function () {
-      if (inp.files && inp.files[0]) {
-        var f = inp.files[0];
-        inp.remove();
-        runFormulaOcr(f);
-      } else {
-        inp.remove();
-      }
-    });
-    inp.click();
-  }
-
-  function runFormulaOcr(file) {
-    var sp = UI.el("div", { class: "spinner" });
-    var sub = UI.el("p", { style: "margin:8px 0 0;font-size:12px;color:var(--muted);text-align:center" },
-      ["Parsing " + file.name + " with n8n\u2026 usually 10\u201330 s"]);
-    var box = UI.el("div", { style: "padding:8px 0" }, [sp, sub]);
-    UI.modal({ title: "Import formula from PDF", body: box, actions: [], wide: false });
-    var t0 = Date.now();
-    var timer = setInterval(function () {
-      sub.textContent = "Parsing " + file.name + " with n8n\u2026 " + Math.round((Date.now() - t0) / 1000) + " s (limit 120 s)";
-    }, 1000);
-    function done() { clearInterval(timer); UI.closeModal(); }
-    OCRImport.parsePdf(file, Store.ocrConfig("formula")).then(function (payload) {
-      var res = OCRImport.mapToFormulaDraft(payload, Store.get());
-      done();
-      formulaEditor(res.existing, {
-        importInfo: {
-          fileName: (payload.document && payload.document.fileName) || file.name,
-          warnings: res.warnings
-        },
-        importData: res.draft
-      });
-    }, function (err) {
-      done();
-      UI.toast((err && err.message) || "Import failed", "err");
-    });
+    renderComp(root);
   }
 
   function importBanner(info, existingRec) {
@@ -1174,22 +1097,10 @@ window.ViewsMaster = (function () {
     return UI.el("div", { class: "import-banner" }, list);
   }
 
-  function formulaEditor(rec, opts) {
-    if (!RBAC.canEditMaster("formulas")) { UI.toast("Formula master is read-only for your role", "err"); return; }
+  function buildCompositionPanel(d, opts) {
     opts = opts || {};
-    var isNew = !rec;
-    var d = Object.assign({ id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "",
-      viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
-      productName: "", variant: "", pdrNo: "", specialHandling: [], note: "", lines: [] }, rec || {});
-    if (!d.lines) d.lines = [];
-    if (!d.specialHandling) d.specialHandling = [];
-    if (opts.importData) {
-      Object.keys(opts.importData).forEach(function (k) {
-        if (opts.importData[k] !== undefined) d[k] = opts.importData[k];
-      });
-      d.lines = (opts.importData.lines || []).map(function (l) { return Object.assign({}, l); });
-    }
     var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. LB01SC04BB" });
+    if (opts.lockCode) { iCode.disabled = true; iCode.title = "The Formula Code keys all four parts and can't be changed here."; }
     var iKat = UI.select([["", "(select category)"]].concat(FFS_CATS.map(function (c) { return [c, c]; })), d.kategori || "");
     var iCust = customerCombo(d.customerId);
     var iPdr = UI.input({ class: "input mono", value: d.pdrNo || "", placeholder: "e.g. 077/01/2026" });
@@ -1295,50 +1206,180 @@ window.ViewsMaster = (function () {
     }
     renderSpecial();
 
-    var body = UI.el("div", {}, [
+    var body = UI.el("div", { class: "wm-panel" }, [
       UI.el("div", { class: "form-grid" }, [
-        UI.field("Formula Code", iCode, "The doc Kode, e.g. LB01SC04BB (never the FFS document number)."),
+        UI.field("Formula Code", iCode, opts.lockCode ? "Locked — the Formula Code keys all four parts." : "The doc Kode, e.g. LB01SC04BB (never the FFS document number)."),
         UI.field("Customer", iCust),
         UI.field("PDR No. (Marketing)", iPdr),
         UI.field("Product Name", iProductName),
         UI.field("Variant", iVariant),
-        UI.field("Kategori", iKat),
+        UI.field("Category", iKat),
         UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss).")
       ]),
       UI.el("p", { class: "hint", style: "margin:2px 0 10px",
-        text: "pH, viscosity and stability results are edited in the Product Specification and Test Result submodules; they feed this formula automatically." }),
+        text: "pH, viscosity and stability results are edited in the Product Specification and Test Result tabs; they feed this formula automatically." }),
       UI.field("Note", iNote),
       fieldset("Material Composition", [compWrap]),
       fieldset("Special-material handling (FFS tab 5)", [specialWrap])
     ]);
-    if (opts.importInfo) body.insertBefore(importBanner(opts.importInfo, rec), body.firstChild);
-    UI.modal({
-      title: (isNew ? "New Formula (FFS)" : "Edit Formula - " + rec.id) + (opts.importInfo ? " (imported)" : ""),
-      body: body, wide: true,
-      actions: [{
-        label: "Save Formula", cls: "btn-primary", onClick: function () {
-          d.id = iCode.value.trim(); d.kategori = iKat.value; d.customerId = iCust.value || "";
-          d.pdrNo = iPdr.value.trim();
-          d.productName = iProductName.value.trim(); d.variant = iVariant.value.trim();
-          d.bj = Number(iBj.value) || 0;
-          d.note = iNote.value.trim();
-          d.specialHandling = d.specialHandling.filter(function (sh) { return (sh.material || "").trim() || (sh.handling || "").trim(); })
-            .map(function (sh) { return { material: (sh.material || "").trim(), handling: (sh.handling || "").trim() }; });
-          if (!d.id) { UI.toast("Formula Code is required", "err"); return; }
-          if (!(d.bj > 0)) { UI.toast("BJ must be greater than 0", "err"); return; }
-          if (isNew && Store.formulaById(d.id)) { UI.toast("Formula Code already exists", "err"); return; }
-          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("Formula Code already exists", "err"); return; }
-          /* clean lines: remove empty material rows */
-          d.lines = d.lines.filter(function (l) { return l.materialCode; });
-          Store.saveFormula(d, isNew, rec ? rec.id : null);
-          if (opts.importInfo) {
-            Store.audit("IMPORT", "Master Formula", d.id + " confirmed from " + opts.importInfo.fileName);
-          }
-          UI.closeModal(); App.refresh();
-          UI.toast("Formula " + d.id + " saved", "ok");
-        }
-      }]
+    if (opts.importInfo) body.insertBefore(importBanner(opts.importInfo, opts.existingRec || null), body.firstChild);
+
+    function collect() {
+      d.id = iCode.value.trim(); d.kategori = iKat.value; d.customerId = iCust.value || "";
+      d.pdrNo = iPdr.value.trim();
+      d.productName = iProductName.value.trim(); d.variant = iVariant.value.trim();
+      d.bj = Number(iBj.value) || 0; d.note = iNote.value.trim();
+      d.specialHandling = d.specialHandling.filter(function (sh) { return (sh.material || "").trim() || (sh.handling || "").trim(); })
+        .map(function (sh) { return { material: (sh.material || "").trim(), handling: (sh.handling || "").trim() }; });
+      d.lines = d.lines.filter(function (l) { return l.materialCode; });
+    }
+    return { body: body, collect: collect };
+  }
+
+  /* ---------------- Master Formula wide editor (Option B) ----------------
+     One modal keyed by the selected Formula Code, four tabs inside:
+     Composition + Product Specification + Test Result + Machine Setup.
+     Panels are built once and cached so typed values survive tab switches;
+     each tab imports inline from its own webhook (a nested modal would close
+     this editor). Save writes the composition plus every touched part as
+     Draft and syncs the QC cache back to the core formula. */
+  function formulaEditor(rec) {
+    if (!RBAC.canEditMaster("formulas")) { UI.toast("Formula master is read-only for your role", "err"); return; }
+    var isNew = !rec;
+    var clone = function (o) { return o == null ? null : JSON.parse(JSON.stringify(o)); };
+    var d = Object.assign({
+      id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "", viscosity: "",
+      stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-", productName: "", variant: "",
+      pdrNo: "", specialHandling: [], note: "", lines: []
+    }, clone(rec) || {});
+    if (!d.lines) d.lines = [];
+    if (!d.specialHandling) d.specialHandling = [];
+
+    var importInfo = {};
+
+    var fid = rec ? rec.id : "";
+    var subs = {}, subExisted = {};
+    ["lab", "stab", "machine"].forEach(function (k) {
+      var existing = Store[ViewsFormulaSub.KINDS[k].byId](fid);
+      subExisted[k] = !!existing;
+      subs[k] = Object.assign(ViewsFormulaSub.defaults(k), clone(existing) || {}, { id: fid });
     });
+
+    var active = "comp", importing = false, panels = {};
+    var TABS = [["comp", "Composition"], ["lab", "Product Specification"], ["stab", "Test Result"], ["machine", "Machine Setup"]];
+    var tabBar = UI.el("div", { class: "wm-tabs", role: "tablist" });
+    var toolbar = UI.el("div", { class: "wm-toolbar" });
+    var panelHost = UI.el("div", { class: "wm-body" });
+    var wideBody = UI.el("div", { class: "wm" }, [tabBar, toolbar, panelHost]);
+
+    function presence(k) { return k === "comp" ? !!(d.id || (d.lines || []).length) : ViewsFormulaSub.hasContent(k, subs[k]); }
+    function getPanel(k) {
+      if (!panels[k]) {
+        panels[k] = k === "comp"
+          ? buildCompositionPanel(d, { importInfo: importInfo.comp, existingRec: rec, lockCode: !isNew })
+          : ViewsFormulaSub.panel(k, subs[k], { importInfo: importInfo[k] });
+      }
+      return panels[k];
+    }
+    function collectActive() { if (panels[active]) panels[active].collect(); }
+    function drawTabs() {
+      UI.clear(tabBar);
+      TABS.forEach(function (t) {
+        var k = t[0], ok = presence(k);
+        tabBar.appendChild(UI.el("button", {
+          class: "wm-tab" + (active === k ? " on" : ""), role: "tab", "aria-selected": active === k ? "true" : "false",
+          onclick: function () { showTab(k); }
+        }, [t[1], UI.el("span", { class: ok ? "ok" : "miss", text: ok ? "✓" : "—" })]));
+      });
+    }
+    function drawToolbar() {
+      UI.clear(toolbar);
+      toolbar.appendChild(UI.el("span", { class: "wm-code mono", text: d.id || "(new formula)" }));
+      toolbar.appendChild(UI.el("span", { class: "sp" }));
+      toolbar.appendChild(UI.btn("Import PDF", function () { doImport(active); }, "btn-sm"));
+    }
+    function showTab(k) {
+      if (importing) return;
+      collectActive();
+      active = k;
+      drawTabs(); drawToolbar();
+      UI.clear(panelHost);
+      panelHost.appendChild(getPanel(k).body);
+    }
+    function doImport(k) {
+      if (importing) return;
+      var cfg = Store.ocrConfig(k === "comp" ? "formula" : ViewsFormulaSub.KINDS[k].cfg);
+      if (!cfg.webhookUrl || !cfg.token) {
+        UI.toast("Import isn't configured for this part yet — add its webhook in Settings & Data.", "err");
+        return;
+      }
+      var inp = UI.el("input", { type: "file", accept: ".pdf,application/pdf", style: "display:none" });
+      document.body.appendChild(inp);
+      inp.addEventListener("change", function () {
+        if (inp.files && inp.files[0]) { var f = inp.files[0]; inp.remove(); runTabImport(k, f); }
+        else inp.remove();
+      });
+      inp.click();
+    }
+    function runTabImport(k, file) {
+      collectActive();
+      importing = true;
+      UI.clear(panelHost);
+      panelHost.appendChild(UI.el("div", { class: "wm-importing" }, [
+        UI.el("div", { class: "spinner" }),
+        UI.el("p", { text: "Parsing " + file.name + "… usually 10–30 s" })
+      ]));
+      function fail(err) { importing = false; showTab(k); UI.toast((err && err.message) || "Import failed", "err"); }
+      if (k === "comp") {
+        OCRImport.parsePdf(file, Store.ocrConfig("formula")).then(function (payload) {
+          var res = OCRImport.mapToFormulaDraft(payload, Store.get());
+          Object.keys(res.draft).forEach(function (kk) { if (res.draft[kk] !== undefined) d[kk] = res.draft[kk]; });
+          d.lines = (res.draft.lines || []).map(function (l) { return Object.assign({}, l); });
+          if (!isNew) d.id = rec.id;
+          importInfo.comp = { fileName: (payload.document && payload.document.fileName) || file.name, warnings: res.warnings };
+          delete panels.comp;
+          importing = false; showTab("comp");
+          UI.toast("Parsed " + file.name + " — review the values, then Save as Draft", "ok");
+        }, fail);
+      } else {
+        ViewsFormulaSub.parseImport(k, file, function (res, fileName) {
+          Object.keys(res.draft).forEach(function (kk) { subs[k][kk] = res.draft[kk]; });
+          subs[k].id = d.id || fid;
+          importInfo[k] = { fileName: fileName, warnings: res.warnings };
+          delete panels[k];
+          importing = false; showTab(k);
+          UI.toast("Parsed " + fileName + " — review the values, then Save as Draft", "ok");
+        }, fail);
+      }
+    }
+    function saveAll() {
+      if (importing) { UI.toast("Import in progress — wait for it to finish", "err"); return; }
+      Object.keys(panels).forEach(function (k) { panels[k].collect(); });
+      if (!d.id) { UI.toast("Formula Code is required", "err"); showTab("comp"); return; }
+      if (!(d.bj > 0)) { UI.toast("BJ must be greater than 0", "err"); showTab("comp"); return; }
+      if (isNew && Store.formulaById(d.id)) { UI.toast("Formula Code already exists", "err"); showTab("comp"); return; }
+      Store.saveFormula(d, isNew, rec ? rec.id : null);
+      if (importInfo.comp) Store.audit("IMPORT", "Master Formula", d.id + " confirmed from " + importInfo.comp.fileName);
+      ["lab", "stab", "machine"].forEach(function (k) {
+        if (!panels[k] && !importInfo[k]) return;
+        var sd = subs[k];
+        if (!subExisted[k] && !ViewsFormulaSub.hasContent(k, sd)) return;
+        sd.id = d.id; sd.status = "Draft";
+        ViewsFormulaSub.stamp(sd);
+        Store[ViewsFormulaSub.KINDS[k].save](sd, !subExisted[k], subExisted[k] ? fid : null);
+        ViewsFormulaSub.syncCoreCache(k, sd);
+        if (importInfo[k]) Store.audit("IMPORT", ViewsFormulaSub.KINDS[k].entity, sd.id + " confirmed from " + importInfo[k].fileName);
+      });
+      UI.closeModal(); App.refresh();
+      UI.toast("Formula " + d.id + " saved as Draft", "ok");
+    }
+
+    UI.modal({
+      title: isNew ? "New Formula" : "Edit Formula — " + rec.id,
+      body: wideBody, wide: true,
+      actions: [{ label: "Save as Draft", cls: "btn-primary", onClick: saveAll }]
+    });
+    showTab("comp");
   }
 
   /* ---------------- Master Packaging (FPS, FR-PD-02 / SBK ST-PD-01) ----------------
