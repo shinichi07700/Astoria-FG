@@ -67,6 +67,48 @@ window.Engine = (function () {
     return "";
   }
 
+  /* ---------- 13-char SKU codification (2026-11-12 scheme) ---------- */
+  var APP_MAP = {
+    "Eye Makeup": "EY", "Face Makeup": "FC", "Lip Makeup": "LP", "Skincare": "SK",
+    "Cleansers & Makeup Removers": "CL", "Sun Care": "SN", "Body Care": "BD", "Hair Care": "HC"
+  };
+  var DOSAGE_FORMS = [
+    ["LQ", "Liquid"], ["CR", "Cream"], ["SS", "Semi-Solid"], ["LP", "Loose Powder"],
+    ["CP", "Compact Powder"], ["LS", "Lipstick"], ["ST", "Stick"]
+  ];
+  var SKU_RE = /^[A-Z]{3}(EY|FC|LP|SK|CL|SN|BD|HC)(LQ|CR|SS|LP|CP|LS|ST)\d{3}[A-Z]\d{2}$/;
+  function appOf(kategori) { return APP_MAP[kategori] || ""; }
+  function skuCode(s) {
+    return (s.brand || "") + (s.app || "") + (s.form || "") +
+      pad(s.seq || 0, 3) + (s.size || "") + pad(s.rev || 0, 2);
+  }
+  function validSkuCode(code) { return SKU_RE.test(String(code || "")); }
+  /* Seq: reuse the (brand,app,form,formula) group's seq, else max+1 in (brand,app,form). 0 = overflow. */
+  function seqFor(rows, brand, app, form, formulaId) {
+    var group = rows.filter(function (f) {
+      return f.brandId === brand && f.app === app && f.form === form && f.formulaId === formulaId && f.seq;
+    });
+    if (group.length) return group[0].seq;
+    var max = 0;
+    rows.forEach(function (f) {
+      if (f.brandId === brand && f.app === app && f.form === form && f.seq > max) max = f.seq;
+    });
+    return max >= 999 ? 0 : max + 1;
+  }
+  /* Size: same netto reuses its letter; new netto gets highest+1. "" = overflow. */
+  function sizeFor(rows, brand, app, form, seq, netto) {
+    var own = "", max = 0;
+    rows.forEach(function (f) {
+      if (f.brandId === brand && f.app === app && f.form === form && f.seq === seq && f.sizeLetter) {
+        var c = f.sizeLetter.charCodeAt(0) - 64;
+        if (c > max) max = c;
+        if (Number(f.nettoMl) === Number(netto)) own = f.sizeLetter;
+      }
+    });
+    if (own) return own;
+    return max >= 26 ? "" : String.fromCharCode(65 + max);
+  }
+
   /* ---------- Column C: Status F/G evaluator (exact port) ---------- */
   function evaluateStatus(ffs, fps, kodeNA, expireVal, isDiscontinued) {
     ffs = (ffs || "").toString().trim();
@@ -200,6 +242,8 @@ window.Engine = (function () {
     nowWIB: nowWIB, todayISO: todayISO, parseDate: parseDate, toISO: toISO,
     romanMonth: romanMonth, yearOf: yearOf,
     kodeFG: kodeFG, evaluateStatus: evaluateStatus, statusClass: statusClass,
+    APP_MAP: APP_MAP, DOSAGE_FORMS: DOSAGE_FORMS, appOf: appOf, skuCode: skuCode,
+    validSkuCode: validSkuCode, seqFor: seqFor, sizeFor: sizeFor,
     fmtNum: fmtNum, pad: pad, noBom: noBom, noRequest: noRequest,
     explode: explode, round4: round4,
     parseCSV: parseCSV, toCSV: toCSV, download: download, esc: esc
