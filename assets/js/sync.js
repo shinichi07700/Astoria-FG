@@ -60,6 +60,8 @@ window.Sync = (function () {
   var has011 = false;
   var has012 = false;
   var has016 = false;
+  var has018 = false;
+  var TABLES_018 = ["m_formula", "m_formula_lab", "m_formula_stab", "m_formula_machine", "m_packaging"];
 
   /* Migration 009 adds m_supplier.category. Until it runs the column is
      absent, so the first upsert carrying it fails; the flag then drops the
@@ -87,7 +89,8 @@ window.Sync = (function () {
       probe("materials", "supplier_links", function (ok) { if (ok) has010 = true; }),
       probe("m_formula", "lines", function (ok) { if (ok) has011 = true; }),
       probe("m_packaging", "volume_ml", function (ok) { has012 = ok; }),
-      probe("m_formula", "product_name", function (ok) { if (ok) has016 = true; })
+      probe("m_formula", "product_name", function (ok) { if (ok) has016 = true; }),
+      probe("m_formula", "pdr_no", function (ok) { if (ok) has018 = true; })
     ]);
   }
 
@@ -189,16 +192,87 @@ window.Sync = (function () {
     };
     if (has011) { row.lines = f.lines || []; }
     if (has016) { row.product_name = f.productName || ""; row.variant = f.variant || ""; }
+    if (has018) { row.pdr_no = f.pdrNo || ""; row.special_handling = f.specialHandling || []; }
     return row;
   }
   function formulaFrom(r) {
     if (r.lines !== undefined) has011 = true;
+    if (r.pdr_no !== undefined) has018 = true;
     return {
       id: r.id, kategori: r.kategori, customerId: r.customer_id || "", urutan: Number(r.urutan) || 0,
       bj: Number(r.bj) || 1, phMin: r.ph_min == null ? "" : Number(r.ph_min), phMax: r.ph_max == null ? "" : Number(r.ph_max),
       viscosity: r.viscosity, stabTk: r.stab_tk, stabTkul: r.stab_tkul, stabT50: r.stab_t50, stabTm: r.stab_tm,
       productName: r.product_name || "", variant: r.variant || "",
+      pdrNo: r.pdr_no || "", specialHandling: r.special_handling || [],
       note: r.note, lines: r.lines || []
+    };
+  }
+  /* migration 017 - FFS submodules; 018 repurposes lab->Product Specification
+     and stab->Test Result, and adds machine equipment. Legacy 017 columns are
+     kept as a derived cache so BOM/QA readers keep working. */
+  function labRow(r) {
+    var row = {
+      id: r.id, ph_result: r.phResult == null ? null : Number(r.phResult),
+      viscosity: r.viscosity || "", bj: r.bj == null ? null : Number(r.bj),
+      appearance: r.appearance || "", odor: r.odor || "", tpc: r.tpc || "", ym: r.ym || "",
+      test_date: r.testDate || "", lab_ref: r.labRef || "", analyst: r.analyst || "",
+      note: r.note || "", status: r.status || "Draft", updated: r.updated || "", by: r.by || ""
+    };
+    if (has018) {
+      row.specs = r.specs || []; row.expiry = r.expiry || "";
+      row.spr_ref = r.sprRef || ""; row.storage_temp = r.storageTemp || "";
+    }
+    return row;
+  }
+  function labFrom(r) {
+    if (r.specs !== undefined) has018 = true;
+    return {
+      id: r.id, phResult: r.ph_result == null ? null : Number(r.ph_result),
+      viscosity: r.viscosity || "", bj: r.bj == null ? null : Number(r.bj),
+      appearance: r.appearance || "", odor: r.odor || "", tpc: r.tpc || "", ym: r.ym || "",
+      testDate: r.test_date || "", labRef: r.lab_ref || "", analyst: r.analyst || "",
+      specs: r.specs || [], expiry: r.expiry || "", sprRef: r.spr_ref || "", storageTemp: r.storage_temp || "",
+      note: r.note || "", status: r.status || "Draft", updated: r.updated || "", by: r.by || ""
+    };
+  }
+  function stabRow(r) {
+    var row = {
+      id: r.id, start_date: r.startDate || "", protocol: r.protocol || "",
+      weeks_total: Number(r.weeksTotal) || 0, weeks_observed: Number(r.weeksObserved) || 0,
+      obs: r.obs || [], note: r.note || "", status: r.status || "Draft",
+      updated: r.updated || "", by: r.by || ""
+    };
+    if (has018) {
+      row.panel_ref = r.panelRef || ""; row.micro_ref = r.microRef || "";
+      row.compat_ref = r.compatRef || ""; row.stab_ref = r.stabRef || "";
+    }
+    return row;
+  }
+  function stabFrom(r) {
+    if (r.panel_ref !== undefined) has018 = true;
+    return {
+      id: r.id, startDate: r.start_date || "", protocol: r.protocol || "",
+      weeksTotal: Number(r.weeks_total) || 0, weeksObserved: Number(r.weeks_observed) || 0,
+      obs: r.obs || [], panelRef: r.panel_ref || "", microRef: r.micro_ref || "",
+      compatRef: r.compat_ref || "", stabRef: r.stab_ref || "",
+      note: r.note || "", status: r.status || "Draft", updated: r.updated || "", by: r.by || ""
+    };
+  }
+  function machineRow(r) {
+    var row = {
+      id: r.id, mixer_id: r.mixerId || "", mixer_name: r.mixerName || "", vessel: r.vessel || "",
+      phases: r.phases || [], vacuum: r.vacuum || "", note: r.note || "",
+      status: r.status || "Draft", updated: r.updated || "", by: r.by || ""
+    };
+    if (has018) { row.equipment = r.equipment || []; }
+    return row;
+  }
+  function machineFrom(r) {
+    if (r.equipment !== undefined) has018 = true;
+    return {
+      id: r.id, mixerId: r.mixer_id || "", mixerName: r.mixer_name || "", vessel: r.vessel || "",
+      phases: r.phases || [], equipment: r.equipment || [], vacuum: r.vacuum || "", note: r.note || "",
+      status: r.status || "Draft", updated: r.updated || "", by: r.by || ""
     };
   }
   function packRow(p) {
@@ -219,16 +293,30 @@ window.Sync = (function () {
       row.shrink_tunnel_c = 0;
     }
     if (has011) { row.lines = p.lines || []; }
+    if (has018) {
+      row.product_name = p.productName || "";
+      row.variants = p.variants || []; row.container = p.container || [];
+      row.machines = p.machines || []; row.steps = p.steps || [];
+      row.storage_temp = p.storageTemp || ""; row.mbox_qty = Number(p.mboxQty) || 0;
+      row.fill_min_ml = p.fillMinMl == null ? null : Number(p.fillMinMl);
+      row.fill_max_ml = p.fillMaxMl == null ? null : Number(p.fillMaxMl);
+    }
     return row;
   }
   function packFrom(r) {
     if (r.lines !== undefined) has011 = true;
     if (r.volume_ml !== undefined) has012 = true;
+    if (r.variants !== undefined) has018 = true;
     return {
       id: r.id, customerId: r.customer_id || "", urutanVarian: Number(r.urutan_varian) || 0,
+      productName: r.product_name || "",
       volumeMl: has012 ? Number(r.volume_ml) || 0 : Number(r.fill_min) || 0,
       fillTolPct: has012 ? Number(r.fill_tol_pct) || 0 : 0,
       inkjetSyntax: r.inkjet_syntax, note: r.note,
+      variants: r.variants || [], container: r.container || [], machines: r.machines || [],
+      steps: r.steps || [], storageTemp: r.storage_temp || "", mboxQty: Number(r.mbox_qty) || 0,
+      fillMinMl: r.fill_min_ml == null ? null : Number(r.fill_min_ml),
+      fillMaxMl: r.fill_max_ml == null ? null : Number(r.fill_max_ml),
       lines: r.lines || []
     };
   }
@@ -246,9 +334,12 @@ window.Sync = (function () {
   }
   function packUpsert(recs) {
     return SB.upsert("m_packaging", recs.map(packRow)).catch(function (err) {
-      /* flip the 012 shape and retry once - covers a cloud that has the
-         migration applied and one that does not */
-      if (isMissingColumn(err)) { has012 = !has012; return SB.upsert("m_packaging", recs.map(packRow)); }
+      /* drop the 018 columns first, then flip the 012 shape - covers a cloud
+         with neither, either, or both migrations applied */
+      if (isMissingColumn(err)) {
+        if (has018) { has018 = false; } else { has012 = !has012; }
+        return SB.upsert("m_packaging", recs.map(packRow));
+      }
       throw err;
     });
   }
@@ -256,7 +347,14 @@ window.Sync = (function () {
   function upsertTable(t, recs) {
     if (t.name === "m_supplier") return supUpsert(recs);
     if (t.name === "m_packaging") return packUpsert(recs);
-    return SB.upsert(t.name, recs.map(t.row));
+    var p = SB.upsert(t.name, recs.map(t.row));
+    if (has018 && TABLES_018.indexOf(t.name) >= 0) {
+      p = p.catch(function (err) {
+        if (isMissingColumn(err)) { has018 = false; return SB.upsert(t.name, recs.map(t.row)); }
+        throw err;
+      });
+    }
+    return p;
   }
   function mixerRow(m) {
     return {
@@ -625,6 +723,10 @@ window.Sync = (function () {
     { name: "materials", pk: "code", key: "code", store: "materials", v: 1, row: matRow, from: matFrom },
     { name: "m_customer", pk: "id", key: "id", store: "customers", v: 2, row: custRow, from: custFrom },
     { name: "m_formula", pk: "id", key: "id", store: "formulas", v: 2, row: formulaRow, from: formulaFrom },
+    /* migration 017 - absent until it runs; fetchTable tolerates the miss */
+    { name: "m_formula_lab", pk: "id", key: "id", store: "formulaLab", v: 17, row: labRow, from: labFrom },
+    { name: "m_formula_stab", pk: "id", key: "id", store: "formulaStab", v: 17, row: stabRow, from: stabFrom },
+    { name: "m_formula_machine", pk: "id", key: "id", store: "formulaMachine", v: 17, row: machineRow, from: machineFrom },
     { name: "m_packaging", pk: "id", key: "id", store: "packagings", v: 2, row: packRow, from: packFrom },
     { name: "m_mixer", pk: "id", key: "id", store: "mixers", v: 2, row: mixerRow, from: mixerFrom },
     { name: "boms", pk: "id", key: "id", store: "boms", v: 1, row: bomRow, from: bomFrom,

@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Formula — Option B · wide modal edit (approved flow)</title>
+</head>
+<body style="margin:0;background:#f3eeee">
+<style>
+.mfu{
+  --ink:#404041; --muted:#6d6d6e; --faint:#919191;
+  --line:#efe3e3; --line-strong:#e2cdce; --bg:#f9f6f6; --card:#fff;
+  --accent:#b12024; --accent-dark:#8f1a1e; --accent-soft:#ffedee;
+  --green:#017544; --green-soft:#e2f3e9; --amber:#a86a10; --amber-soft:#fdf3dd;
+  --red:#b12024; --red-soft:#ffedee; --blue:#29567e; --blue-soft:#e6eef5;
+  --font:"Public Sans","Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+  --ffs-rose-soft:#f8eded; --ffs-panel:#fcfafa; --ffs-line:#ece3e3; --ffs-line-strong:#dcc8c9;
+  --ffs-green:#1a7f4b; --ffs-green-soft:#e2f3e9; --ffs-green-line:#bfe3cf;
+  --ffs-amber:#9a6b00; --ffs-amber-soft:#fdf3dd; --ffs-amber-line:#ecd9a8;
+  --ffs-red:#b42318; --ffs-red-soft:#fdeceb; --ffs-red-line:#f0c4c0;
+  --ffs-grey:#7c7c7f; --ffs-grey-soft:#efedee; --ffs-grey-line:#d9d6d7;
+  --sh1:0 1px 2px rgba(63,32,33,.05),0 4px 10px -4px rgba(63,32,33,.12);
+  --ease:cubic-bezier(.16,1,.3,1);
+  font-family:var(--font);font-size:14px;color:var(--ink);background:#f3eeee;padding:20px 16px 40px;max-width:1280px;margin:0 auto;
+}
+.mfu *{box-sizing:border-box}
+.mfu :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.mfu h1{font-size:20px;font-weight:650;margin:0 0 4px}
+.mfu .mock-head p{margin:0 0 12px;color:var(--muted);font-size:13px;max-width:860px;line-height:1.55}
+.mfu .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.mfu .flow .step{font:600 12px var(--font);color:var(--accent-dark);background:var(--accent-soft);border:1px solid #e8d0d1;border-radius:999px;padding:7px 13px}
+.mfu .flow .arr{color:var(--faint);font-size:13px}
+.mfu .reset-btn{margin-left:auto}
+.mfu .app-frame{position:relative;background:var(--bg);border:1px solid var(--line-strong);border-radius:16px;overflow:hidden;box-shadow:0 18px 44px rgba(64,64,65,.12)}
+.mfu .topbar{height:54px;background:rgba(255,255,255,.85);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 18px}
+.mfu .brandmark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#e0666a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
+.mfu .topbar .t{font-weight:650;font-size:13.5px}
+.mfu .topbar .chip{margin-left:auto;font:500 11px var(--mono);color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+.mfu .body-row{display:flex;min-height:640px}
+.mfu .sidenav{width:180px;flex:0 0 180px;background:#fff;border-right:1px solid var(--line);padding:14px 10px;font-size:12.5px}
+.mfu .sidenav .grp{font:600 10px var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:12px 8px 6px}
+.mfu .sidenav a{display:block;padding:7px 10px;border-radius:8px;color:var(--muted);text-decoration:none;margin-bottom:1px;cursor:default}
+.mfu .sidenav a.on{background:var(--accent-soft);color:var(--accent-dark);font-weight:600}
+.mfu .stage{flex:1;padding:20px 22px;min-width:0}
+.mfu .page-head h2{font-size:18px;font-weight:650;margin:0 0 3px}
+.mfu .page-head p{margin:0 0 16px;color:var(--muted);font-size:12.5px;max-width:760px;line-height:1.5}
+.mfu .btn-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.mfu .btn{appearance:none;cursor:pointer;border:1px solid var(--line-strong);background:#fff;color:var(--ink);font:600 12.5px var(--font);padding:8px 14px;border-radius:9px;transition:.15s}
+.mfu .btn:hover{border-color:var(--accent);color:var(--accent-dark)}
+.mfu .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.mfu .btn-primary:hover{background:var(--accent-dark);color:#fff}
+.mfu .btn-danger{color:var(--red);border-color:#e8c6c4}
+.mfu .btn-danger:hover{background:var(--red-soft);border-color:var(--red);color:var(--red)}
+.mfu .btn-sm{padding:5px 10px;font-size:11.5px}
+.mfu .btn[disabled]{opacity:.55;cursor:not-allowed}
+.mfu .hintline{font-size:11.5px;color:var(--faint);margin-top:14px;text-align:center;line-height:1.5}
+.mfu .mono{font-family:var(--mono)}
+
+/* ---------- list: production Spec Sheet Stack ---------- */
+.mfu .ffs-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.mfu .ffs-search{position:relative;flex:0 1 320px;min-width:220px}
+.mfu .ffs-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);stroke:var(--faint);fill:none;stroke-width:1.7;stroke-linecap:round}
+.mfu .ffs-search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--ffs-line-strong);border-radius:10px;background:#fff;color:var(--ink);font-size:13.5px;transition:border-color .16s var(--ease),box-shadow .16s var(--ease)}
+.mfu .ffs-search input::placeholder{color:var(--faint)}
+.mfu .ffs-search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ffs-rose-soft)}
+.mfu .ffs-sel{position:relative;display:inline-block}
+.mfu .ffs-sel select{appearance:none;padding:9px 30px 9px 12px;border:1px solid var(--ffs-line-strong);border-radius:10px;background:#fff;color:var(--ink);font-size:13px;font-weight:500;cursor:pointer}
+.mfu .ffs-sel select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ffs-rose-soft)}
+.mfu .ffs-sel svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;stroke:var(--muted);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mfu .ffs-count{margin-left:auto;font:500 12px var(--mono);color:var(--muted);background:#fff;border:1px solid var(--ffs-line);border-radius:999px;padding:7px 13px}
+.mfu .ffs-count b{color:var(--accent-dark);font-weight:600}
+.mfu .ffs-sheet{background:#fff;border:1px solid var(--ffs-line);border-radius:12px;box-shadow:var(--sh1);overflow:hidden}
+.mfu .ffs-scroll{overflow-x:auto}
+.mfu table.ffs{width:100%;border-collapse:collapse;min-width:1080px}
+.mfu table.ffs th,.mfu table.ffs td{border:1px solid var(--ffs-line);padding:0}
+.mfu table.ffs thead th{background:#fdfbfb;font-weight:600;text-align:center;vertical-align:middle}
+.mfu th.ffs-grp{color:var(--accent);font-size:13px;letter-spacing:.06em;padding:9px 8px;border-bottom:none!important}
+.mfu th.ffs-col{color:var(--ink);font-size:12px;font-weight:600;padding:8px 10px 10px;letter-spacing:.02em}
+.mfu th.ffs-col small{display:block;font-weight:500;color:var(--muted);font-size:10.5px;letter-spacing:.04em;margin-top:2px}
+.mfu th.ffs-span2{border-bottom:none!important}
+.mfu th[data-sort]{cursor:pointer;user-select:none}
+.mfu th[data-sort]:hover{color:var(--accent-dark)}
+.mfu th[data-sort]::after{content:"↕";margin-left:5px;color:var(--faint);font-size:10px}
+.mfu th[aria-sort="ascending"]::after{content:"↑";color:var(--accent)}
+.mfu th[aria-sort="descending"]::after{content:"↓";color:var(--accent)}
+.mfu table.ffs td{vertical-align:middle}
+.mfu tr.ffs-row{cursor:pointer;transition:background .16s var(--ease)}
+.mfu tr.ffs-row:hover{background:#fcf7f7}
+.mfu tr.ffs-row.open{background:#fcf7f7}
+.mfu td.ffs-code{background:var(--ffs-rose-soft);text-align:center;padding:13px 10px;width:132px}
+.mfu td.ffs-code .ffs-mono{font-family:var(--mono);color:var(--accent-dark);font-size:13.5px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.mfu tr.ffs-row:hover td.ffs-code{background:#f5e3e3}
+.mfu td.ffs-kat{background:#faf4f4;text-align:center;padding:12px 8px;width:136px;min-width:124px}
+.mfu td.ffs-kat span{font:600 11px/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--accent);white-space:normal}
+.mfu td.ffs-cust{padding:12px 14px;width:150px;font-size:13px;color:var(--ink)}
+.mfu td.ffs-prod{padding:12px 16px;min-width:220px}
+.mfu td.ffs-prod b{display:block;font-weight:600;font-size:13.5px;color:#2e2e2f}
+.mfu td.ffs-prod span{display:block;margin-top:2px;font:400 11.5px var(--mono);color:var(--muted)}
+.mfu td.ffs-num{text-align:center;padding:12px 8px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}
+.mfu td.ffs-lamps{padding:10px 6px;text-align:center;white-space:nowrap}
+.mfu .ffs-lamp{display:inline-block;width:26px;height:26px;margin:0 3px;border-radius:6px;vertical-align:middle;border:1.4px solid;transition:transform .18s var(--ease),box-shadow .18s var(--ease)}
+.mfu tr.ffs-row:hover .ffs-lamp{transform:translateY(-1px);box-shadow:0 3px 8px -2px rgba(63,32,33,.25)}
+.mfu .ffs-lamp.pass{background:var(--ffs-green-soft);border-color:var(--ffs-green-line)}
+.mfu .ffs-lamp.run{background:var(--ffs-amber-soft);border-color:var(--ffs-amber-line)}
+.mfu .ffs-lamp.fail{background:var(--ffs-red-soft);border-color:var(--ffs-red-line)}
+.mfu .ffs-lamp.none{background:var(--ffs-grey-soft);border-color:var(--ffs-grey-line)}
+.mfu td.ffs-expc{width:44px;text-align:center;padding:8px 6px}
+.mfu .ffs-btn-exp{width:30px;height:30px;border:none;background:transparent;border-radius:8px;cursor:pointer;display:inline-grid;place-items:center;color:var(--muted);transition:background .16s var(--ease),color .16s var(--ease)}
+.mfu .ffs-btn-exp:hover{background:var(--ffs-rose-soft);color:var(--accent-dark)}
+.mfu .ffs-btn-exp svg{stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .3s var(--ease)}
+.mfu tr.ffs-row.open .ffs-btn-exp svg{transform:rotate(180deg)}
+.mfu tr.ffs-expander>td{padding:0;border-top:none;background:var(--ffs-panel)}
+.mfu .ffs-panel{margin:0 18px 18px;padding:20px 22px;background:#fff;border:1px solid var(--ffs-line);border-radius:10px;box-shadow:var(--sh1);display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:30px;animation:panelIn .35s var(--ease)}
+@keyframes panelIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.mfu .ffs-panel h3{margin:0 0 14px;font:600 13px var(--font);color:var(--accent-dark);letter-spacing:.02em}
+.mfu .ffs-bar{display:flex;height:30px;border-radius:7px;overflow:hidden;background:var(--ffs-grey-soft)}
+.mfu .ffs-bar i{display:grid;place-items:center;font:600 11px var(--mono);color:#fff;white-space:nowrap;font-style:normal}
+.mfu .ffs-bar i.txt-dark{color:#3f3f40}
+.mfu .ffs-legend{display:grid;grid-template-columns:1fr 1fr;gap:7px 26px;margin:16px 0 0;padding:0;list-style:none}
+.mfu .ffs-legend li{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink)}
+.mfu .ffs-legend i{width:9px;height:9px;border-radius:50%;flex:0 0 9px;font-style:normal}
+.mfu .ffs-legend b{margin-left:auto;font:500 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.mfu .ffs-total{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid var(--ffs-line)}
+.mfu .ffs-total span{font:600 13px var(--font);color:var(--accent-dark)}
+.mfu .ffs-total b{font:600 14px var(--mono);color:var(--accent-dark);font-variant-numeric:tabular-nums}
+.mfu .ffs-timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;position:relative;margin-top:6px}
+.mfu .ffs-tnode{position:relative;text-align:center;padding-top:34px}
+.mfu .ffs-tnode .dot{position:absolute;top:0;left:50%;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid;display:grid;place-items:center;font:600 12px var(--mono)}
+.mfu .ffs-tnode::before{content:"";position:absolute;top:14px;right:50%;width:100%;height:0;border-top:2px solid transparent}
+.mfu .ffs-tnode:first-child::before{display:none}
+.mfu .ffs-tnode.pass::before{border-top-color:var(--ffs-green-line)}
+.mfu .ffs-tnode.run::before{border-top-color:var(--ffs-amber-line)}
+.mfu .ffs-tnode.fail::before{border-top-color:var(--ffs-red-line)}
+.mfu .ffs-tnode.none::before{border-top-style:dashed;border-top-color:var(--ffs-grey-line)}
+.mfu .ffs-tnode.pass .dot{border-color:var(--ffs-green);color:var(--ffs-green)}
+.mfu .ffs-tnode.run .dot{border-color:var(--ffs-amber);color:var(--ffs-amber)}
+.mfu .ffs-tnode.fail .dot{border-color:var(--ffs-red);color:var(--ffs-red)}
+.mfu .ffs-tnode.none .dot{border-color:var(--ffs-grey-line);color:var(--faint);border-style:dashed}
+.mfu .ffs-tnode b{display:block;font:600 12px var(--mono);color:var(--ink)}
+.mfu .ffs-tnode small{display:block;margin-top:3px;font-size:11px;color:var(--muted)}
+.mfu .ffs-tnode em{display:block;margin-top:6px;font:700 10.5px var(--font);font-style:normal;letter-spacing:.1em}
+.mfu .ffs-tnode.pass em{color:var(--ffs-green)}
+.mfu .ffs-tnode.run em{color:var(--ffs-amber)}
+.mfu .ffs-tnode.fail em{color:var(--ffs-red)}
+.mfu .ffs-tnode.none em{color:var(--faint)}
+.mfu .ffs-pnotes{grid-column:1/-1;margin:0;padding-top:14px;border-top:1px solid var(--ffs-line);font:400 12px var(--mono);color:var(--muted)}
+.mfu .ffs-pnotes b{color:var(--ink);font-weight:600}
+.mfu .ffs-actions{grid-column:1/-1;display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--ffs-line)}
+.mfu .ffs-empty{padding:56px 24px;text-align:center}
+.mfu .ffs-empty svg{margin:0 auto 14px;stroke:var(--ffs-line-strong);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;display:block}
+.mfu .ffs-empty h2{margin:0 0 6px;font:400 20px Georgia,serif;color:#2e2e2f}
+.mfu .ffs-empty p{margin:0 0 18px;color:var(--muted);font-size:13px}
+.mfu .ffs-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:13px 18px;border-top:1px solid var(--ffs-line);background:#fdfbfb}
+.mfu .ffs-showing{font-size:12.5px;color:var(--muted)}
+.mfu .ffs-pager{display:flex;gap:6px;margin-left:auto;align-items:center}
+.mfu .ffs-pg{min-width:32px;height:32px;padding:0 6px;border:1px solid var(--ffs-line-strong);border-radius:8px;background:#fff;color:var(--ink);font:500 12.5px var(--mono);cursor:pointer;display:inline-grid;place-items:center}
+.mfu .ffs-pg:hover:not([disabled]):not([aria-current]){background:var(--ffs-rose-soft);border-color:#e8d0d1;color:var(--accent-dark)}
+.mfu .ffs-pg[aria-current]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.mfu .ffs-pg[disabled]{opacity:.45;cursor:not-allowed}
+.mfu .ffs-pg.dots{border:none;background:none;cursor:default}
+.mfu .ffs-pg svg{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mfu .ffs-rpp{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.mfu .ffs-rpp select{appearance:none;padding:6px 26px 6px 10px;border:1px solid var(--ffs-line-strong);border-radius:8px;background:#fff;font:500 12.5px var(--mono);color:var(--ink);cursor:pointer}
+
+/* ---------- wide modal (Option B) ---------- */
+.mfu .overlay{position:absolute;inset:0;background:rgba(63,32,33,.45);display:flex;align-items:flex-start;justify-content:center;padding:26px 18px;z-index:100;overflow:auto}
+.mfu .wmodal{background:var(--bg);border-radius:16px;box-shadow:0 18px 44px rgba(64,64,65,.35);width:min(1240px,100%);max-height:calc(100% - 8px);display:flex;flex-direction:column;overflow:hidden;animation:pop .22s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.mfu .wm-head{display:flex;align-items:center;gap:12px;padding:15px 20px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.mfu .wm-head .code{font:600 16px var(--mono);color:var(--accent-dark)}
+.mfu .wm-head .prod{font-size:13px;color:var(--muted)}
+.mfu .wm-head .x{margin-left:auto;appearance:none;cursor:pointer;border:1px solid var(--line-strong);background:#fff;border-radius:8px;width:30px;height:30px;font-size:16px;color:var(--muted);line-height:1}
+.mfu .wm-head .x:hover{background:var(--accent-soft);color:var(--accent-dark);border-color:#e8d0d1}
+.mfu .pill{display:inline-block;font:600 10.5px var(--font);border-radius:999px;padding:3px 9px;border:1px solid}
+.mfu .pill.draft{background:#eef1f4;color:var(--muted);border-color:var(--line-strong)}
+.mfu .pill.pass{background:var(--green-soft);color:var(--green);border-color:#bfe3c8}
+.mfu .pill.run{background:var(--amber-soft);color:var(--amber);border-color:#f0d9a8}
+.mfu .pill.fail{background:var(--red-soft);color:var(--red);border-color:#f3c1bd}
+.mfu .wm-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1.5px solid var(--line-strong);background:#fff;padding:0 16px}
+.mfu .wm-tab{appearance:none;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;gap:8px;padding:11px 15px 12px;font:600 13px var(--font);color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1.5px}
+.mfu .wm-tab:hover{color:var(--accent-dark)}
+.mfu .wm-tab[aria-selected="true"]{color:var(--accent-dark);border-bottom-color:var(--accent)}
+.mfu .wm-tab .ok{color:var(--green);font-size:11px}
+.mfu .wm-tab .miss{color:var(--faint);font-size:11px}
+.mfu .wm-body{padding:18px 20px;overflow:auto;flex:1;min-height:200px}
+.mfu .wm-foot{padding:12px 20px;background:#fff;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.mfu .wm-foot .hint{font-size:11.5px;color:var(--faint);margin-right:auto}
+.mfu .tab-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 14px}
+.mfu .tab-toolbar .sp{margin-left:auto}
+.mfu .sub-sec{font:600 11px var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:18px 0 8px}
+.mfu .import-banner{background:var(--amber-soft);border:1px solid var(--ffs-amber-line);border-radius:10px;padding:10px 14px;font-size:12.5px;color:#6b4a0e;margin:0 0 14px;line-height:1.5}
+.mfu .sidenav a[data-nav]{cursor:pointer}
+.mfu .set-card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh1);padding:18px 20px;margin:0 0 16px}
+.mfu .set-card h3{margin:0 0 4px;font:600 14px var(--font);color:var(--ink)}
+.mfu .set-card>.hint{margin:0 0 6px}
+.mfu .set-kind{border-top:1px solid var(--line);padding:12px 0}
+.mfu .set-kind .k{font:600 12px var(--font);color:var(--accent-dark);margin:0 0 8px;letter-spacing:.02em}
+.mfu .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 14px}
+.mfu .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mfu .fld.span-2{grid-column:span 2}
+.mfu .fld.span-3{grid-column:1/-1}
+.mfu .fld>label,.mfu .fld>.lbl{font:600 11px var(--font);color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+.mfu .fld .help{font-size:11px;color:var(--faint)}
+.mfu .input,.mfu select.input{width:100%;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);font:400 13px var(--font);padding:8px 10px;transition:border-color .15s,box-shadow .15s}
+.mfu .input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--ffs-rose-soft)}
+.mfu .input[readonly]{background:#f6f2f2;color:var(--muted)}
+.mfu textarea.input{resize:vertical;min-height:38px;line-height:1.45}
+.mfu table.ed{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid var(--ffs-line)}
+.mfu table.ed th{background:#fdfbfb;font:600 11px var(--font);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ffs-line);color:var(--muted)}
+.mfu table.ed td{padding:6px 8px;border-bottom:1px solid var(--ffs-line);vertical-align:middle}
+.mfu table.ed tr:last-child td{border-bottom:none}
+.mfu table.ed .input{font-size:12.5px;padding:6px 8px}
+.mfu table.ed td.empty{color:var(--faint);text-align:center;padding:16px;font-style:italic}
+.mfu .mat-name{font-size:12px;color:var(--muted)}
+.mfu .total-chip{display:inline-flex;align-items:center;gap:7px;font:600 12px var(--mono);border-radius:999px;padding:6px 13px;border:1px solid}
+.mfu .total-chip.ok{background:var(--green-soft);color:var(--green);border-color:#bfe3c8}
+.mfu .total-chip.bad{background:var(--red-soft);color:var(--red);border-color:#f3c1bd}
+.mfu .cbar{display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--ffs-line);margin:8px 0;background:var(--ffs-grey-soft)}
+.mfu .cbar i{display:block;height:100%}
+.mfu .hint{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.5}
+.mfu .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 18px;margin-bottom:6px}
+.mfu .kv .k{font:500 11px var(--font);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.mfu .kv .v{font-size:13px;margin-top:1px}
+.mfu .lamp-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid var(--ffs-line);border-radius:10px;padding:10px 14px}
+.mfu .lamp-row .li{display:flex;align-items:center;gap:7px;font:600 11.5px var(--mono);color:var(--muted)}
+.mfu fieldset{border:1px solid var(--line-strong);border-radius:10px;padding:12px 14px;margin:14px 0 0;background:#fff}
+.mfu fieldset legend{font:600 11px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);padding:0 7px}
+.mfu .sub-phase{border:1px solid var(--line-strong);border-radius:8px;margin-bottom:12px;overflow:hidden;background:#fff}
+.mfu .sub-ph-head{background:var(--accent-soft);padding:8px 10px;display:flex;gap:8px;align-items:center}
+.mfu .sub-ph-head .input{font-weight:600}
+.mfu .sub-step{border-top:1px solid var(--line);padding:12px 12px 10px}
+.mfu .step-tag{font:600 10.5px var(--mono);letter-spacing:.06em;color:var(--accent);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.mfu .ccp{display:inline-block;font:600 10px var(--font);background:var(--red-soft);color:var(--red);border:1px solid #f3c1bd;border-radius:5px;padding:2px 7px}
+.mfu .check-row{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:8px 0}
+.mfu .check-row input{width:15px;height:15px;accent-color:var(--accent)}
+.mfu .sub-param{border:1px dashed var(--line-strong);border-radius:8px;padding:9px;margin-top:8px;background:#fffdfd}
+.mfu .sub-ps-head{display:flex;gap:8px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+.mfu .sub-ps-head select{max-width:300px}
+.mfu .vpill{font:600 10px var(--font);background:var(--blue-soft);color:var(--blue);border:1px solid #bcd6ef;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.mfu table.chan{width:100%;border-collapse:collapse;font-size:12px}
+.mfu table.chan td{border:1px solid var(--ffs-line);padding:4px 8px}
+.mfu table.chan td:first-child{color:var(--muted);width:38%}
+.mfu table.chan td:last-child{font-family:var(--mono);color:var(--faint);width:70px;text-align:center}
+.mfu table.chan .input{font-size:12px;padding:5px 8px}
+.mfu .empty-part{border:1px dashed var(--line-strong);border-radius:10px;background:var(--ffs-panel);padding:26px;text-align:center;color:var(--muted)}
+.mfu .empty-part p{margin:0 0 12px;font-size:13px}
+.mfu .eq-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.mfu .eq-row .input{flex:1}
+
+/* ---------- confirm / spinner / toast ---------- */
+.mfu .confirm-ov{position:absolute;inset:0;background:rgba(63,32,33,.5);display:flex;align-items:center;justify-content:center;z-index:300;padding:20px}
+.mfu .confirm-card{background:#fff;border-radius:14px;box-shadow:0 18px 44px rgba(64,64,65,.35);max-width:420px;width:100%;padding:20px 22px;animation:pop .18s var(--ease)}
+.mfu .confirm-card h3{margin:0 0 8px;font-size:15px;font-weight:650}
+.mfu .confirm-card p{margin:0 0 16px;font-size:13px;color:var(--muted);line-height:1.5}
+.mfu .confirm-card .row{display:flex;gap:9px;justify-content:flex-end}
+.mfu .spinner-ov{position:absolute;inset:0;background:rgba(63,32,33,.45);display:flex;align-items:center;justify-content:center;z-index:250}
+.mfu .spinner-card{background:#fff;border-radius:14px;padding:26px 34px;text-align:center;box-shadow:0 18px 44px rgba(64,64,65,.35)}
+.mfu .spinner{width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid var(--ffs-rose-soft);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mfu .spinner-card p{margin:0;font-size:12.5px;color:var(--muted)}
+.mfu .toast{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font:500 12.5px var(--font);padding:10px 18px;border-radius:10px;z-index:400;opacity:0;transition:.25s;pointer-events:none;max-width:86%;display:flex;align-items:center;gap:12px}
+.mfu .toast.show{opacity:1;pointer-events:auto}
+.mfu .toast.err{background:var(--red)}
+.mfu .toast button{appearance:none;cursor:pointer;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font:600 11.5px var(--font);border-radius:7px;padding:4px 10px}
+.mfu .toast button:hover{background:rgba(255,255,255,.15)}
+
+@media (max-width:900px){
+  .mfu .ffs-panel{grid-template-columns:1fr;gap:24px}
+  .mfu .form-grid{grid-template-columns:repeat(2,1fr)}
+  .mfu .fld.span-2{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .mfu .sidenav{display:none}
+  .mfu .overlay{padding:10px 8px}
+  .mfu .form-grid{grid-template-columns:1fr}
+  .mfu .fld.span-2,.mfu .fld.span-3{grid-column:auto}
+  .mfu .kv{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  .mfu *,.mfu *::before,.mfu *::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="mfu">
+  <div class="mock-head">
+    <h1>Master Formula — Option B · wide modal edit</h1>
+    <p>Approved flow: the list and the row preview stay exactly as they are today. <b>Edit</b> now opens one wide modal where all four parts of the FFS are edited in place — no second dialog, so Machine Setup gets the room it needs.</p>
+    <div class="flow">
+      <span class="step">1 · Master Formula list</span><span class="arr">→</span>
+      <span class="step">2 · Click row: composition + stability</span><span class="arr">→</span>
+      <span class="step">3 · Edit: wide modal, 4 editable tabs</span>
+      <button class="btn btn-sm reset-btn" data-act="reset-demo">Reset demo data</button>
+    </div>
+  </div>
+
+  <div class="app-frame">
+    <div class="topbar">
+      <div class="brandmark">AP</div>
+      <div class="t">PT Astoria Prima — F/G Master &amp; BOM Suite</div>
+      <div class="chip">Mockup · local browser data</div>
+    </div>
+    <div class="body-row">
+      <nav class="sidenav" aria-label="Main navigation">
+        <div class="grp">Master Data</div>
+        <a>Master F/G</a><a>Master Material</a><a>Master Customer</a><a class="on" data-nav="formula" aria-current="page">Master Formula</a><a>Master Packaging</a>
+        <div class="grp">Sales</div><a>Sales Order</a>
+        <div class="grp">PPIC</div><a>Bill of Material</a><a>PPIC Netting</a>
+        <div class="grp">Admin</div><a data-nav="settings">Settings &amp; Data</a>
+      </nav>
+      <div class="stage" id="stage"></div>
+    </div>
+    <div id="modalRoot"></div>
+    <div id="confirmRoot"></div>
+    <div id="spinnerRoot"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+  <div class="hintline">Mockup only — edits persist in this browser (localStorage). Import PDF buttons simulate a document parse; nothing is sent to a server. Rose/cream palette and components match the live app.</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LS="astoria-mockup-option-b-v1";
+var CATS=["Lip Makeup","Face Makeup","Eye Makeup","Skincare","Cleansers & Makeup Removers","Sun Care","Body Care","Hair Care"];
+var CUSTOMERS=["PT SASC Kosmetika","Lashboss Indonesia","CV Ayu Cantik","PT Bintang Kosmetika"];
+var CONDS=["TK","TKUL","T50","TM"];
+var TESTS=[["stabTk","TK","Thermal cycle"],["stabTkul","TKUL","UV cycle"],["stabT50","T50","50°C oven"],["stabTm","TM","Real-time"]];
+var STAB={Pass:{cls:"pass",word:"PASS"},Running:{cls:"run",word:"RUNNING"},Fail:{cls:"fail",word:"FAIL"},"-":{cls:"none",word:"NOT SET"}};
+var HUES=["#4a7fc1","#5fb3a1","#9b7bc0","#e2603f","#dfb54c","#7fa05a","#c0788f","#8a8a8c"];
+var CHANNELS=[["suhu","Temperature","°C"],["homogenizer","Homogenizer speed","rpm"],["disperser","Disperser speed","rpm"],["mixer","Mixer speed","Hz"],["scraper","Scraper speed","Hz"],["time","Duration","min"]];
+var TIME_TYPES=["Stirring","Mixing","Cooling"];
+var MIXERS=[
+  {id:"MX-CKL500",name:"CKL machine 500 kg",cap:500,vessel:"CKL kettle"},
+  {id:"MX-HIMIX1000",name:"Himix 1,000 kg",cap:1000,vessel:"Himix"},
+  {id:"MX-HIMIX300",name:"Himix 300 kg",cap:300,vessel:"Himix"},
+  {id:"MX-DJK500",name:"Double jacket kettle 500 kg",cap:500,vessel:"Double jacket kettle"}
+];
+var MATS={"RM-1001":"Aqua","RM-1002":"Glycerin","RM-2001":"Cetearyl Alcohol","RM-2002":"Glyceryl Stearate","RM-2003":"Dimethicone","RM-3001":"Titanium Dioxide","RM-3002":"Iron Oxides","RM-3003":"Mica","RM-4001":"Phenoxyethanol","RM-4002":"Tocopheryl Acetate","RM-5001":"Niacinamide","RM-5002":"Panthenol","RM-6001":"Ethylhexyl Methoxycinnamate","RM-7001":"Carbomer","RM-7002":"Xanthan Gum","RM-8001":"Parfum","RM-9999":"Others"};
+var STAB_OPTS=["-","Running","Pass","Fail"];
+
+function L(c,p){return {code:c,pct:p};}
+function obs(cond,status,week,note){return {cond:cond,status:status,week:week,note:note||""};}
+function ps(mixer,batch,v){var o={mixerId:mixer,batchLabel:batch,suhu:"",homogenizer:"",disperser:"",mixer:"",scraper:"",time:"",timeType:"Stirring"};for(var k in v)o[k]=v[k];return o;}
+function step(mats,vessel,out,instr,ccp,ccpNote,params){return {materials:mats,vessel:vessel,outputLabel:out,instruction:instr,ccp:!!ccp,ccpNote:ccpNote||"",params:params};}
+function phase(name,steps){return {name:name,steps:steps};}
+function mkLab(f,extra){
+  var specs=[
+    {parameter:"pH",std:(f.phMin||"5.0")+" – "+(f.phMax||"6.0"),method:"001MA00 · pH meter @ 25°C"},
+    {parameter:"Viskositas",std:f.viscosity||"5000 – 10000",method:"003MA00 · Brookfield sp06 / 50 rpm / 25°C"},
+    {parameter:"Appearance",std:"Homogeneous, matches standard",method:"Visual"},
+    {parameter:"SG",std:"0,95 – 1,05 g/mL",method:"002MA00 · Pycnometer"},
+    {parameter:"Micro",std:"TPC ≤ 10² cfu/g; bebas E. coli / S. aureus / P. aeruginosa",method:"005MA00"}
+  ];
+  var o={specs:specs,expiry:"3 years",sprRef:"SPR-"+f.id.slice(0,6)+"-00",storageTemp:"18–27 °C, avoid direct sunlight",note:"",status:"Draft"};
+  if(extra)for(var k in extra)o[k]=extra[k];
+  return o;
+}
+function mkStab(f,lamps,wo,startDate){
+  var notes={Pass:"no separation",Running:"final read W12",Fail:"separation observed"};
+  var o={panelRef:"PNL-"+f.id.slice(2,5),stabRef:"STB-"+f.id.slice(0,6),microRef:"MIC-"+f.id.slice(2,5),compatRef:"CMP-"+f.id.slice(2,5),startDate:startDate||"2026-01-12",protocol:"12 weeks, 4 conditions",weeksTotal:12,weeksObserved:wo,obs:[],note:"",status:"Draft"};
+  CONDS.forEach(function(c,i){if(lamps[i]!=="-")o.obs.push(obs(c,lamps[i],wo,notes[lamps[i]]||""));});
+  return o;
+}
+function core(id,kat,cust,prod,variant,bj,pmin,pmax,visc,lamps,lines,note,pdr,special){
+  return {id:id,kategori:kat,customer:cust,productName:prod,variant:variant,bj:bj,phMin:pmin,phMax:pmax,viscosity:visc,stabTk:lamps[0],stabTkul:lamps[1],stabT50:lamps[2],stabTm:lamps[3],lines:lines,note:note||"",pdrNo:pdr||"",specialHandling:special||[]};
+}
+function seed(){
+  var formulas=[
+    core("LB01SC04BB","Face Makeup","PT SASC Kosmetika","Liquid Blush","Rich Girl Era",1.05,"5.0","6.0","15000 – 25000",["Pass","Pass","Running","-"],
+      [L("RM-1001",46.5),L("RM-1002",6),L("RM-2001",4.5),L("RM-2002",3.5),L("RM-2003",5),L("RM-3001",9),L("RM-3002",2.5),L("RM-3003",4),L("RM-4001",0.8),L("RM-4002",0.5),L("RM-8001",0.7),L("RM-9999",17)],
+      "8-phase emulsion — CKL machine. Pigment dispersion must pass grind gauge before let-down.","077/01/2026",
+      [{mat:"RM-3002",how:"Disperse pigment before milling — grind gauge ≤ 15 µm"}]),
+    core("SO01LB04","Skincare","Lashboss Indonesia","Rapunzel Serum","Original",1.02,"5.5","6.5","5000 – 10000",["Pass","Pass","Pass","Running"],
+      [L("RM-1001",78.4),L("RM-1002",5),L("RM-5001",4),L("RM-5002",2),L("RM-7002",0.6),L("RM-4001",0.8),L("RM-4002",0.5),L("RM-9999",8.7)],
+      "Single-phase Himix 1000 — scraper Hz, no homogenizer. FFS Number FFSBAL00500 (SO01LB04).","081/02/2026",[]),
+    core("LM02SC01AA","Lip Makeup","CV Ayu Cantik","Lip Serum","Rose",1.01,"5.5","6.5","8000 – 12000",["Pass","Pass","Pass","Pass"],
+      [L("RM-1001",70),L("RM-1002",10),L("RM-2003",8),L("RM-4002",1),L("RM-4001",0.8),L("RM-9999",10.2)],"","089/02/2026",[]),
+    core("SK02SC02CC","Sun Care","PT Bintang Kosmetika","Sunscreen Gel SPF 50","-",1.08,"6.0","7.0","20000 – 35000",["Running","-","-","-"],
+      [L("RM-1001",64.5),L("RM-6001",12),L("RM-3001",6),L("RM-1002",5),L("RM-7001",0.8),L("RM-4001",0.8),L("RM-9999",10.9)],
+      "UV filter dispersion below 40 °C.","090/03/2026",[{mat:"RM-6001",how:"Disperse slowly, avoid excessive heat"}]),
+    core("EM01SC03DD","Eye Makeup","PT SASC Kosmetika","Volume Mascara","Waterproof",1.12,"6.5","7.5","30000 – 50000",["Pass","Fail","-","-"],
+      [L("RM-1001",55),L("RM-3002",12),L("RM-2001",6),L("RM-2002",4),L("RM-2003",6),L("RM-7002",1),L("RM-4001",0.8),L("RM-9999",15.2)],"","095/03/2026",[]),
+    core("CL01SC01EE","Cleansers & Makeup Removers","CV Ayu Cantik","Micellar Water","Sensitive",1.00,"5.0","6.0","100 – 500",["Pass","Pass","Pass","Pass"],
+      [L("RM-1001",88.2),L("RM-1002",4),L("RM-2003",2),L("RM-4001",0.8),L("RM-9999",5)],"","101/04/2026",[]),
+    core("BC01SC02FF","Body Care","PT Bintang Kosmetika","Body Lotion","Shea",1.04,"5.5","6.5","10000 – 20000",["Pass","Pass","-","-"],
+      [L("RM-1001",72),L("RM-1002",6),L("RM-2001",5),L("RM-2002",3),L("RM-2003",4),L("RM-4002",0.5),L("RM-4001",0.8),L("RM-9999",8.7)],"","105/04/2026",[]),
+    core("HC01SC01GG","Hair Care","Lashboss Indonesia","Hair Serum","Argan",0.98,"4.5","5.5","3000 – 8000",["Running","Running","-","-"],
+      [L("RM-1001",68),L("RM-2003",10),L("RM-1002",4),L("RM-5002",2),L("RM-4002",1),L("RM-4001",0.8),L("RM-9999",14.2)],"","110/05/2026",[]),
+    core("FM02SC04HH","Face Makeup","PT SASC Kosmetika","Cushion Foundation","Natural Beige",1.09,"5.0","6.0","12000 – 18000",["Pass","Pass","Pass","Pass"],
+      [L("RM-1001",50),L("RM-3001",11),L("RM-3002",3),L("RM-3003",5),L("RM-1002",6),L("RM-2003",5),L("RM-2001",4),L("RM-4001",0.8),L("RM-9999",15.2)],"","112/05/2026",[]),
+    core("LM03SC02JJ","Lip Makeup","CV Ayu Cantik","Lip Cream Matte","Terracotta",1.06,"5.5","6.5","25000 – 40000",["Pass","Pass","Running","-"],
+      [L("RM-1001",42),L("RM-2003",14),L("RM-3002",8),L("RM-3003",6),L("RM-2001",7),L("RM-1002",5),L("RM-4001",0.8),L("RM-9999",17.2)],"","118/06/2026",[]),
+    core("SK03SC03KK","Skincare","PT Bintang Kosmetika","Night Cream","Retinol",1.03,"5.0","6.0","15000 – 30000",["-","-","-","-"],
+      [L("RM-1001",74.2),L("RM-1002",6),L("RM-2001",5),L("RM-2003",4),L("RM-4002",0.5),L("RM-4001",0.8),L("RM-9999",9.5)],
+      "New draft — stability study not started.","121/06/2026",[]),
+    core("EM02SC01LL","Eye Makeup","Lashboss Indonesia","Brow Gel","Clear",1.05,"6.0","7.0","8000 – 15000",["Pass","-","-","-"],
+      [L("RM-1001",80.4),L("RM-1002",4),L("RM-7002",1.2),L("RM-3002",3),L("RM-4001",0.8),L("RM-9999",10.6)],"","125/07/2026",[])
+  ];
+  var lab={},stab={},machine={};
+  formulas.forEach(function(f){
+    if(f.id==="SK03SC03KK"||f.id==="CL01SC01EE"||f.id==="EM02SC01LL"){ if(f.id==="EM02SC01LL")lab[f.id]=mkLab(f); return; }
+    lab[f.id]=mkLab(f);
+  });
+  stab["LB01SC04BB"]=mkStab(formulas[0],["Pass","Pass","Running","-"],4,"2026-01-12");
+  stab["SO01LB04"]=mkStab(formulas[1],["Pass","Pass","Pass","Running"],12,"2026-02-01");
+  stab["LM02SC01AA"]=mkStab(formulas[2],["Pass","Pass","Pass","Pass"],12,"2026-02-10");
+  stab["SK02SC02CC"]=mkStab(formulas[3],["Running","-","-","-"],2,"2026-06-01");
+  stab["EM01SC03DD"]=mkStab(formulas[4],["Pass","Fail","-","-"],6,"2026-03-15");
+  stab["CL01SC01EE"]=mkStab(formulas[5],["Pass","Pass","Pass","Pass"],12,"2026-01-20");
+  stab["BC01SC02FF"]=mkStab(formulas[6],["Pass","Pass","-","-"],8,"2026-04-02");
+  stab["HC01SC01GG"]=mkStab(formulas[7],["Running","Running","-","-"],3,"2026-07-01");
+  stab["FM02SC04HH"]=mkStab(formulas[8],["Pass","Pass","Pass","Pass"],12,"2026-02-20");
+  stab["LM03SC02JJ"]=mkStab(formulas[9],["Pass","Pass","Running","-"],5,"2026-05-11");
+  machine["LB01SC04BB"]={vacuum:"-0.6 bar during homogenizing",equipment:["CKL machine 500 kg","Homogenizer","Heater","Vacuum pump","Grind gauge"],phases:[
+    phase("Phase I — Oil Phase",[step(["RM-2001","RM-2002","RM-2003"],"CKL kettle","Bulk A","Heat the oil phase to 75–80 °C while stirring.",false,"",[ps("MX-CKL500","500 kg",{suhu:"75–80",mixer:"40",time:"25"})])]),
+    phase("Phase II — Water Phase",[step(["RM-1001","RM-1002"],"CKL kettle","Bulk B","Heat the water phase to 75–80 °C until fully dissolved.",false,"",[ps("MX-CKL500","500 kg",{suhu:"75–80",mixer:"35",time:"20"})])]),
+    phase("Phase III — Emulsification",[step(["RM-3001","RM-3002","RM-3003"],"CKL machine","Bulk C","Add the water phase to the oil phase slowly while homogenizing, then add pigment and mill until it passes the grind gauge.",true,"CCP-1: temperature ≥ 75 °C during emulsification; grind gauge ≤ 15 µm",[ps("MX-CKL500","500 kg",{suhu:"75–80",homogenizer:"3000",scraper:"25",time:"30",timeType:"Mixing"}),ps("MX-HIMIX1000","1000 kg",{suhu:"75–80",homogenizer:"3500",scraper:"20",time:"25",timeType:"Mixing"})])]),
+    phase("Phase IV — Let-down & Cooling",[step(["RM-4001","RM-4002","RM-8001"],"CKL machine","Bulk finished","Cool to 40 °C, add preservative, vitamin E and fragrance, stir until homogeneous.",false,"",[ps("MX-CKL500","500 kg",{suhu:"40–45",mixer:"30",time:"15",timeType:"Cooling"})])])
+  ],note:"",status:"Draft"};
+  machine["SO01LB04"]={vacuum:"-0.4 bar during mixing",equipment:["Himix 1,000 kg","Vacuum pump"],phases:[
+    phase("Phase I — Single Phase",[step(["RM-1001","RM-1002","RM-5001","RM-5002","RM-7002","RM-4001","RM-4002"],"Himix 1000","Bulk serum","Add all materials in sequence, stir with the scraper until fully dissolved without heating.",false,"",[ps("MX-HIMIX1000","1000 kg",{suhu:"25–30",mixer:"30",scraper:"20–25",time:"40"})])])
+  ],note:"",status:"Draft"};
+  machine["EM01SC03DD"]={vacuum:"",equipment:["CKL machine 500 kg","Homogenizer","Heater"],phases:[
+    phase("Phase I — Water Phase + Thickener",[step(["RM-1001","RM-7002"],"CKL kettle","Bulk A","Disperse xanthan gum in water, heat to 75 °C.",false,"",[ps("MX-CKL500","500 kg",{suhu:"75–80",mixer:"40",time:"20"})])]),
+    phase("Phase II — Pigment Dispersion",[step(["RM-3002","RM-2001","RM-2002","RM-2003","RM-4001"],"CKL machine","Bulk mascara","Add pigment gradually, homogenize until no agglomerates remain.",true,"CCP-1: no pigment agglomerates (drawdown test)",[ps("MX-CKL500","500 kg",{suhu:"70–75",homogenizer:"3200",time:"25",timeType:"Mixing"})])])
+  ],note:"",status:"Draft"};
+  machine["HC01SC01GG"]={vacuum:"",equipment:["Himix 300 kg"],phases:[
+    phase("Phase I — Single Phase",[step(["RM-1001","RM-2003","RM-1002","RM-5002","RM-4002","RM-4001"],"Himix 300","Bulk hair serum","Stir all materials at room temperature until homogeneous.",false,"",[ps("MX-HIMIX300","300 kg",{suhu:"25–30",mixer:"35",scraper:"20",time:"30"})])])
+  ],note:"",status:"Draft"};
+  machine["FM02SC04HH"]={vacuum:"-0.5 bar during homogenizing",equipment:["CKL machine 500 kg","Himix 300 kg","Homogenizer","Heater"],phases:[
+    phase("Phase I — Emulsification",[step(["RM-1001","RM-1002","RM-2001","RM-2003"],"CKL kettle","Bulk A","Emulsify the water and oil phases at 75 °C.",false,"",[ps("MX-CKL500","500 kg",{suhu:"75–80",homogenizer:"3000",time:"25",timeType:"Mixing"})])]),
+    phase("Phase II — Pigment Let-down",[step(["RM-3001","RM-3002","RM-3003","RM-4001"],"Himix 300","Bulk cushion","Disperse pigment into the emulsion, homogenize until the color is even.",true,"CCP-1: color matches the shade standard (drawdown)",[ps("MX-HIMIX300","300 kg",{suhu:"45–50",homogenizer:"2800",scraper:"20",time:"20",timeType:"Mixing"})])])
+  ],note:"",status:"Draft"};
+  return {formulas:formulas,lab:lab,stab:stab,machine:machine};
+}
+
+/* ---------- state ---------- */
+var db;
+try{db=JSON.parse(localStorage.getItem(LS));}catch(e){db=null;}
+if(!db||!db.formulas)db=seed();
+/* Admin-configured import webhooks (Settings & Data). The composition slot is the
+   live formula webhook carried over from the removed list-level Import button; the
+   other three are not deployed yet, so they start empty and gate their tab's import. */
+function defaultWebhooks(){return {
+  formula:{url:"https://n8n-bdghopjw19dv.eu1.sumopod.my.id/webhook/astoria/formula-ocr",token:"demo-token"},
+  lab:{url:"",token:""},stab:{url:"",token:""},machine:{url:"",token:""}
+};}
+db.webhooks=db.webhooks||defaultWebhooks();
+function persist(){try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){}}
+var view={q:"",kat:"",stab:"",page:1,rpp:10,open:null,sortKey:"id",sortDir:1};
+var edit=null; /* {isNew,id,draft:{f,lab,stab,machine},tab,dirty,importInfo} */
+var lastFocus=null,confirmCb=null,toastTimer=null,undoStore=null;
+
+var root=document.querySelector(".mfu");
+function $(s){return root.querySelector(s);}
+function $all(s){return Array.prototype.slice.call(root.querySelectorAll(s));}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function clone(o){return o==null?null:JSON.parse(JSON.stringify(o));}
+function today(){return new Date().toISOString().slice(0,10);}
+function fmtPct(n){return (Math.round(n*100)/100).toFixed(2).replace(/\.?0+$/,"")+"%";}
+function matName(c){return MATS[c]||c;}
+function mixerOf(id){for(var i=0;i<MIXERS.length;i++)if(MIXERS[i].id===id)return MIXERS[i];return null;}
+function formulaOf(id){for(var i=0;i<db.formulas.length;i++)if(db.formulas[i].id===id)return db.formulas[i];return null;}
+function getPath(o,p){var a=p.split(".");for(var i=0;i<a.length;i++){if(o==null)return undefined;o=o[a[i]];}return o;}
+function setPath(o,p,v){var a=p.split(".");for(var i=0;i<a.length-1;i++){if(o[a[i]]==null)o[a[i]]={};o=o[a[i]];}o[a[a.length-1]]=v;}
+function parseRange(s){var m=String(s==null?"":s).replace(/,/g,".").match(/\d+(\.\d+)?/g);if(!m)return null;return [Number(m[0]),m.length>1?Number(m[1]):Number(m[0])];}
+function rollup(rec){
+  var out={TK:"-",TKUL:"-",T50:"-",TM:"-"},best={};
+  ((rec&&rec.obs)||[]).forEach(function(o){if(CONDS.indexOf(o.cond)<0)return;var b=best[o.cond];if(!b||(o.week||0)>=(b.week||0))best[o.cond]=o;});
+  CONDS.forEach(function(c){if(best[c])out[c]=best[c].status||"-";});
+  return out;
+}
+function lampsHtml(lamps){return CONDS.map(function(c,i){var s=STAB[lamps[i]]||STAB["-"];return '<span class="ffs-lamp '+s.cls+'" title="'+c+": "+s.word+'"></span>';}).join("");}
+
+/* ---------- toast / confirm / spinner ---------- */
+function toast(msg,kind,action){
+  var t=$("#toast");t.className="toast show"+(kind==="err"?" err":"");
+  t.innerHTML="<span>"+esc(msg)+"</span>"+(action?'<button type="button">'+esc(action.label)+"</button>":"");
+  if(action)t.querySelector("button").addEventListener("click",function(){hideToast();action.fn();});
+  clearTimeout(toastTimer);toastTimer=setTimeout(hideToast,action?6500:2600);
+}
+function hideToast(){$("#toast").className="toast";}
+function confirmDialog(title,msg,okLabel,danger,cb){
+  confirmCb=cb;
+  $("#confirmRoot").innerHTML='<div class="confirm-ov"><div class="confirm-card" role="alertdialog" aria-modal="true" aria-label="'+esc(title)+'"><h3>'+esc(title)+"</h3><p>"+esc(msg)+'</p><div class="row"><button class="btn" data-c="no">Cancel</button><button class="btn '+(danger?"btn-danger":"btn-primary")+'" data-c="yes">'+esc(okLabel)+"</button></div></div></div>";
+  var card=$("#confirmRoot .confirm-card");
+  card.querySelector('[data-c="no"]').addEventListener("click",closeConfirm);
+  card.querySelector('[data-c="yes"]').addEventListener("click",function(){var f=confirmCb;closeConfirm();if(f)f();});
+  card.querySelector('[data-c="yes"]').focus();
+}
+function closeConfirm(){$("#confirmRoot").innerHTML="";confirmCb=null;}
+function spinner(msg){
+  $("#spinnerRoot").innerHTML='<div class="spinner-ov"><div class="spinner-card"><div class="spinner"></div><p>'+esc(msg)+"</p></div></div>";
+  var t0=Date.now(),p=$("#spinnerRoot p");
+  var timer=setInterval(function(){p.textContent=msg+" "+Math.round((Date.now()-t0)/1000)+" s";},1000);
+  return function(){clearInterval(timer);$("#spinnerRoot").innerHTML="";};
+}
+function pickPdf(cb){
+  var inp=document.createElement("input");inp.type="file";inp.accept=".pdf,application/pdf";inp.style.display="none";
+  document.body.appendChild(inp);
+  inp.addEventListener("change",function(){var f=inp.files&&inp.files[0];inp.remove();if(f)cb(f.name);});
+  inp.click();
+}
+
+/* ---------- list ---------- */
+function filtered(){
+  var q=view.q.toLowerCase();
+  var list=db.formulas.filter(function(f){
+    if(view.kat&&(f.kategori||"")!==view.kat)return false;
+    if(q&&(f.id+" "+(f.kategori||"")+" "+(f.customer||"")+" "+(f.productName||"")+" "+(f.variant||"")).toLowerCase().indexOf(q)<0)return false;
+    if(view.stab){
+      var v=[f.stabTk,f.stabTkul,f.stabT50,f.stabTm];
+      if(view.stab==="fail"&&v.indexOf("Fail")<0)return false;
+      if(view.stab==="run"&&v.indexOf("Running")<0)return false;
+      if(view.stab==="pass"&&v.some(function(x){return x!=="Pass";}))return false;
+      if(view.stab==="open"&&v.indexOf("-")<0)return false;
+    }
+    return true;
+  });
+  var k=view.sortKey,d=view.sortDir;
+  list.sort(function(a,b){
+    var r=0;
+    if(k==="id")r=String(a.id).localeCompare(String(b.id));
+    else if(k==="kat")r=String(a.kategori||"").localeCompare(String(b.kategori||""));
+    else if(k==="product")r=String(a.productName).localeCompare(String(b.productName));
+    else if(k==="bj")r=(Number(a.bj)||0)-(Number(b.bj)||0);
+    else if(k==="lines")r=(a.lines||[]).length-(b.lines||[]).length;
+    return r*d;
+  });
+  return list;
+}
+function panelHtml(f){
+  var lines=(f.lines||[]).map(function(ln){return [matName(ln.code),Number(ln.pct)||0];});
+  var total=lines.reduce(function(a,l){return a+l[1];},0);
+  var hueOf=function(l,i){return l[0]==="Others"?"#8a8a8c":HUES[i%HUES.length];};
+  var bar=lines.map(function(l,i){
+    var txt=l[1]>=3?fmtPct(l[1]):"";
+    return '<i class="'+(l[0]==="Others"?"txt-dark":"")+'" style="width:'+l[1]+'%;background:'+hueOf(l,i)+'" title="'+esc(l[0])+" "+fmtPct(l[1])+'">'+txt+"</i>";
+  }).join("");
+  var legend=lines.map(function(l,i){return "<li><i style=\"background:"+hueOf(l,i)+'"></i>'+esc(l[0])+"<b>"+fmtPct(l[1])+"</b></li>";}).join("");
+  var lamps=[f.stabTk,f.stabTkul,f.stabT50,f.stabTm];
+  var nodes=TESTS.map(function(t,i){var s=STAB[lamps[i]]||STAB["-"];return '<div class="ffs-tnode '+s.cls+'"><span class="dot">'+(i+1)+"</span><b>"+t[1]+"</b><small>"+t[2]+"</small><em>"+s.word+"</em></div>";}).join("");
+  return '<div class="ffs-panel"><div><h3>Composition (w/w%)</h3>'+(lines.length?'<div class="ffs-bar">'+bar+'</div><ul class="ffs-legend">'+legend+'</ul><div class="ffs-total"><span>Total</span><b>'+fmtPct(total)+"</b></div>":'<p style="color:var(--muted);font-size:12px">No composition lines yet.</p>')+"</div>"+
+    '<div><h3>Stability Tests</h3><div class="ffs-timeline">'+nodes+"</div></div>"+
+    (f.note?'<p class="ffs-pnotes"><b>Notes:</b> '+esc(f.note)+"</p>":"")+
+    '<div class="ffs-actions"><button class="btn btn-sm" data-act="edit" data-id="'+esc(f.id)+'">Edit</button><button class="btn btn-danger btn-sm" data-act="del" data-id="'+esc(f.id)+'">Delete</button></div></div>';
+}
+function rowHtml(f){
+  var open=view.open===f.id;
+  var ph=(f.phMin===""||f.phMin==null)&&(f.phMax===""||f.phMax==null)?"-":esc(String(f.phMin)+(f.phMax!==""&&f.phMax!=null&&f.phMax!==f.phMin?" – "+f.phMax:""));
+  var n=(f.lines||[]).length;
+  var lamps=[f.stabTk,f.stabTkul,f.stabT50,f.stabTm];
+  return '<tr class="ffs-row'+(open?" open":"")+'" data-id="'+esc(f.id)+'" tabindex="0" aria-expanded="'+open+'">'+
+    '<td class="ffs-code"><span class="ffs-mono">'+esc(f.id)+"</span></td>"+
+    '<td class="ffs-kat"><span>'+esc(f.kategori||"-")+"</span></td>"+
+    '<td class="ffs-cust">'+esc(f.customer||"-")+"</td>"+
+    '<td class="ffs-prod"><b>'+esc(f.productName||"-")+"</b><span>("+esc(f.variant||"-")+")</span></td>"+
+    '<td class="ffs-num">'+esc(String(f.bj))+"</td>"+
+    '<td class="ffs-num">'+ph+"</td>"+
+    '<td class="ffs-num">'+esc(f.viscosity||"-")+"</td>"+
+    '<td class="ffs-num">'+(n||'<span style="color:var(--faint)">0</span>')+"</td>"+
+    lamps.map(function(s){var st=STAB[s]||STAB["-"];return '<td class="ffs-lamps"><span class="ffs-lamp '+st.cls+'"></span></td>';}).join("")+
+    '<td class="ffs-expc"><button class="ffs-btn-exp" type="button" aria-label="Toggle details for '+esc(f.id)+'"><svg width="16" height="16" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></td></tr>'+
+    (open?'<tr class="ffs-expander open" data-for="'+esc(f.id)+'"><td colspan="13">'+panelHtml(f)+"</td></tr>":"");
+}
+function pagerHtml(pages){
+  function btn(label,page,dis,cur){return '<button class="ffs-pg" type="button" data-page="'+page+'"'+(dis?" disabled":"")+(cur?' aria-current="page"':"")+">"+label+"</button>";}
+  var chev=function(d){return '<svg width="14" height="14" viewBox="0 0 24 24"><path d="'+d+'"/></svg>';};
+  var h=btn(chev("m14 17-5-5 5-5"),view.page-1,view.page===1,false);
+  var list=[];
+  for(var p=1;p<=pages;p++){
+    if(pages<=6||p===1||p===pages||Math.abs(p-view.page)<=1)list.push(p);
+    else if(list[list.length-1]!=="…")list.push("…");
+  }
+  list.forEach(function(p){h+=p==="…"?'<span class="ffs-pg dots">…</span>':btn(p,p,false,p===view.page);});
+  h+=btn(chev("m10 17 5-5-5-5"),view.page+1,view.page===pages,false);
+  return h;
+}
+function drawList(){
+  var wrap=$("#ffsWrap");if(!wrap)return;
+  var list=filtered();
+  var pages=Math.max(1,Math.ceil(list.length/view.rpp));
+  if(view.page>pages)view.page=pages;
+  var slice=list.slice((view.page-1)*view.rpp,view.page*view.rpp);
+  wrap.querySelector(".ffs-count").innerHTML="<b>"+list.length+"</b> / "+db.formulas.length+" formulas";
+  wrap.querySelector(".ffs-showing").textContent=list.length?"Showing "+((view.page-1)*view.rpp+1)+"–"+Math.min(view.page*view.rpp,list.length)+" of "+list.length:"No formulas to show";
+  wrap.querySelector(".ffs-pager").innerHTML=pagerHtml(pages);
+  wrap.querySelector(".ffs-empty").hidden=list.length>0;
+  wrap.querySelector("tbody").innerHTML=slice.map(rowHtml).join("");
+  $all("#ffsWrap th[data-sort]").forEach(function(th){
+    var k=th.getAttribute("data-sort");
+    if(k===view.sortKey)th.setAttribute("aria-sort",view.sortDir===1?"ascending":"descending");
+    else th.removeAttribute("aria-sort");
+  });
+}
+function renderStage(){
+  var stage=$("#stage");
+  var catOpts='<option value="">Category: all</option>'+CATS.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+"</option>";}).join("");
+  var stabOpts='<option value="">Stability: all</option><option value="fail">Has Fail</option><option value="run">Has Running</option><option value="pass">All Pass</option><option value="open">Not complete</option>';
+  var chev='<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  stage.innerHTML='<div class="page-head"><h2>Master Formula (FFS)</h2><p>FFS = composition + product specification + test result + machine setup. Click a row to preview composition &amp; stability; <b>Edit</b> opens the wide modal with all four parts. Records stay Draft until the approval chain lands. Maintained by R&amp;D Formula.</p></div>'+
+  '<div class="btn-row"><button class="btn btn-primary" data-act="new-formula">+ New Formula</button></div>'+
+  '<div class="ffs-page" id="ffsWrap"><div class="ffs-toolbar">'+
+    '<span class="ffs-search"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search formula code / customer / product…" aria-label="Search formulas"></span>'+
+    '<span class="ffs-sel"><select aria-label="Filter by kategori">'+catOpts+"</select>"+chev+"</span>"+
+    '<span class="ffs-sel"><select aria-label="Filter by stability">'+stabOpts+"</select>"+chev+"</span>"+
+    '<span class="ffs-count"></span></div>'+
+  '<section class="ffs-sheet"><div class="ffs-scroll"><table class="ffs"><thead>'+
+    '<tr><th class="ffs-col ffs-span2" rowspan="2" data-sort="id">Formula Code</th><th class="ffs-grp" colspan="3">Identity</th><th class="ffs-grp" colspan="4">Technical</th><th class="ffs-grp" colspan="4">Stability</th><th class="ffs-span2" rowspan="2"></th></tr>'+
+    '<tr><th class="ffs-col" data-sort="kat">Category</th><th class="ffs-col">Customer</th><th class="ffs-col" data-sort="product">Product <small>(variant)</small></th><th class="ffs-col" data-sort="bj">BJ <small>(g/mL)</small></th><th class="ffs-col">pH <small>(25°C)</small></th><th class="ffs-col">Viscosity <small>(cP)</small></th><th class="ffs-col" data-sort="lines">Lines</th><th class="ffs-col">TK</th><th class="ffs-col">TKUL</th><th class="ffs-col">T50</th><th class="ffs-col">TM</th></tr>'+
+  '</thead><tbody></tbody></table></div>'+
+  '<div class="ffs-empty" hidden><svg width="44" height="44" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.3L4.8 18a2.4 2.4 0 0 0 2.1 3.5h10.2a2.4 2.4 0 0 0 2.1-3.5L14 9.3V3M7.5 15h9"/></svg><h2>No formulas match</h2><p>Adjust the search or filters to see the master list again.</p><button class="btn btn-sm" data-act="clear-filters" type="button">Clear search &amp; filters</button></div>'+
+  '<footer class="ffs-foot"><span class="ffs-showing"></span><nav class="ffs-pager" aria-label="Pagination"></nav><label class="ffs-rpp">Rows <span class="ffs-sel"><select aria-label="Rows per page"><option>10</option><option>25</option><option>50</option></select>'+chev+"</span></label></footer></section></div>";
+  var wrap=$("#ffsWrap");
+  var si=wrap.querySelector(".ffs-search input");si.value=view.q;
+  si.addEventListener("input",function(){view.q=si.value.trim();view.page=1;drawList();});
+  var ks=wrap.querySelector('[aria-label="Filter by kategori"]');ks.value=view.kat;
+  ks.addEventListener("change",function(){view.kat=ks.value;view.page=1;drawList();});
+  var ss=wrap.querySelector('[aria-label="Filter by stability"]');ss.value=view.stab;
+  ss.addEventListener("change",function(){view.stab=ss.value;view.page=1;drawList();});
+  var rp=wrap.querySelector(".ffs-rpp select");rp.value=String(view.rpp);
+  rp.addEventListener("change",function(){view.rpp=+rp.value;view.page=1;drawList();});
+  wrap.querySelector(".ffs-pager").addEventListener("click",function(e){
+    var b=e.target.closest("button.ffs-pg");if(!b||b.disabled)return;
+    view.page=+b.getAttribute("data-page");drawList();
+  });
+  wrap.querySelector("thead").addEventListener("click",function(e){
+    var th=e.target.closest("th[data-sort]");if(!th)return;
+    var k=th.getAttribute("data-sort");
+    if(view.sortKey===k)view.sortDir*=-1;else{view.sortKey=k;view.sortDir=1;}
+    drawList();
+  });
+  wrap.querySelector("tbody").addEventListener("click",function(e){
+    var act=e.target.closest("[data-act]");
+    if(act){
+      var id=act.getAttribute("data-id");
+      if(act.getAttribute("data-act")==="edit")openEditor(id);
+      else if(act.getAttribute("data-act")==="del")askDelete(id);
+      return;
+    }
+    var r=e.target.closest("tr.ffs-row");
+    if(r){var rid=r.getAttribute("data-id");view.open=view.open===rid?null:rid;drawList();}
+  });
+  wrap.querySelector("tbody").addEventListener("keydown",function(e){
+    if(e.key!=="Enter"&&e.key!==" ")return;
+    var r=e.target.closest("tr.ffs-row");
+    if(r){e.preventDefault();var rid=r.getAttribute("data-id");view.open=view.open===rid?null:rid;drawList();}
+  });
+  drawList();
+}
+
+/* ---------- delete + undo ---------- */
+function askDelete(id){
+  confirmDialog("Delete formula "+id+"?","BOMs referencing it keep a dangling link. You can undo for a few seconds.","Delete",true,function(){
+    var f=formulaOf(id);if(!f)return;
+    undoStore={f:clone(f),lab:clone(db.lab[id]),stab:clone(db.stab[id]),machine:clone(db.machine[id])};
+    db.formulas=db.formulas.filter(function(x){return x.id!==id;});
+    delete db.lab[id];delete db.stab[id];delete db.machine[id];
+    if(view.open===id)view.open=null;
+    persist();drawList();
+    toast("Formula "+id+" deleted","ok",{label:"Undo",fn:function(){
+      if(!undoStore)return;
+      db.formulas.push(undoStore.f);
+      if(undoStore.lab)db.lab[id]=undoStore.lab;
+      if(undoStore.stab)db.stab[id]=undoStore.stab;
+      if(undoStore.machine)db.machine[id]=undoStore.machine;
+      undoStore=null;persist();drawList();toast("Formula "+id+" restored");
+    }});
+  });
+}
+
+/* ---------- wide modal editor ---------- */
+function emptyF(){return {id:"",kategori:"",customer:"",productName:"",variant:"",bj:1,phMin:"",phMax:"",viscosity:"",stabTk:"-",stabTkul:"-",stabT50:"-",stabTm:"-",lines:[],note:"",pdrNo:"",specialHandling:[]};}
+function emptyLab(){return {specs:[],expiry:"",sprRef:"",storageTemp:"",note:"",status:"Draft"};}
+function emptyStab(){return {panelRef:"",stabRef:"",microRef:"",compatRef:"",startDate:"",protocol:"",weeksTotal:12,weeksObserved:0,obs:[],note:"",status:"Draft"};}
+function emptyMachine(){return {vacuum:"",equipment:[],phases:[],note:"",status:"Draft"};}
+function newParam(){return {mixerId:"",batchLabel:"",suhu:"",homogenizer:"",disperser:"",mixer:"",scraper:"",time:"",timeType:"Stirring"};}
+function newStep(){return {materials:[],instruction:"",vessel:"",outputLabel:"",ccp:false,ccpNote:"",params:[newParam()]};}
+
+function openEditor(id,opts){
+  opts=opts||{};
+  lastFocus=document.activeElement;
+  var isNew=!id;
+  var f=isNew?emptyF():clone(formulaOf(id));
+  if(opts.importData)Object.keys(opts.importData).forEach(function(k){f[k]=opts.importData[k];});
+  edit={isNew:isNew,id:id||"",tab:"comp",dirty:!!opts.importData,importInfo:opts.importInfo||null,
+    draft:{f:f,lab:isNew?null:clone(db.lab[id]||null),stab:isNew?null:clone(db.stab[id]||null),machine:isNew?null:clone(db.machine[id]||null)}};
+  renderModal();
+}
+function attemptClose(){
+  if(!edit)return;
+  if(edit.dirty){confirmDialog("Discard unsaved changes?","Your edits to "+(edit.id||"the new formula")+" have not been saved.","Discard",true,closeEditor);}
+  else closeEditor();
+}
+function closeEditor(){
+  edit=null;$("#modalRoot").innerHTML="";
+  if(lastFocus&&document.contains(lastFocus))lastFocus.focus();
+}
+function presence(){
+  var d=edit.draft;
+  return {comp:true,lab:!!d.lab,stab:!!d.stab,machine:!!d.machine};
+}
+function renderModal(){
+  var d=edit.draft,f=d.f,p=presence();
+  var title=edit.isNew?"New Formula":f.id;
+  var tabs=[["comp","Composition"],["lab","Product Specification"],["stab","Test Result"],["machine","Machine Setup"]];
+  var mr=$("#modalRoot");
+  mr.innerHTML='<div class="overlay"><div class="wmodal" role="dialog" aria-modal="true" aria-label="'+esc(title)+" — "+esc(f.productName||"")+'">'+
+    '<div class="wm-head"><span class="code">'+esc(title)+'</span><span class="prod">'+esc(f.productName||"")+(f.variant&&f.variant!=="-"?" · "+esc(f.variant):"")+'</span><span class="pill draft">Draft</span><button class="x" data-act="close" aria-label="Close editor">×</button></div>'+
+    '<div class="wm-tabs" role="tablist">'+tabs.map(function(t){
+      return '<button class="wm-tab" role="tab" data-tab="'+t[0]+'" aria-selected="'+(edit.tab===t[0])+'">'+t[1]+' <span class="'+(p[t[0]]?"ok":"miss")+'">'+(p[t[0]]?"✓":"—")+"</span></button>";
+    }).join("")+"</div>"+
+    '<div class="wm-body" id="wmBody" role="tabpanel"></div>'+
+    '<div class="wm-foot"><span class="hint">All four parts save together as Draft — the approval chain gates FG-code and BMR later.</span><button class="btn" data-act="close">Cancel</button><button class="btn btn-primary" data-act="save">'+(edit.isNew?"Create Formula":"Save as Draft")+"</button></div>"+
+    "</div></div>";
+  renderTab();
+  mr.querySelector(".overlay").addEventListener("mousedown",function(e){if(e.target.classList.contains("overlay"))attemptClose();});
+  /* modalRoot persists across re-renders — wire its delegated listeners once,
+     otherwise every tab click doubles them and freezes the page. */
+  if(!mr._wired){
+    mr._wired=true;
+    mr.addEventListener("click",function(e){
+      var b=e.target.closest("[data-act]");if(!b)return;
+      var a=b.getAttribute("data-act");
+      if(a==="close")attemptClose();
+      else if(a==="save")saveDraft();
+    });
+    mr.addEventListener("click",function(e){
+      var t=e.target.closest(".wm-tab");if(!t)return;
+      edit.tab=t.getAttribute("data-tab");renderModal();
+    });
+  }
+  var body=$("#wmBody");
+  body.addEventListener("input",onBind);
+  body.addEventListener("change",onBind);
+  body.addEventListener("click",function(e){
+    var b=e.target.closest("[data-act]");if(!b)return;
+    handleAction(b.getAttribute("data-act"),b);
+  });
+  var first=body.querySelector("input:not([readonly]),select,textarea");
+  if(first)first.focus();else mr.querySelector(".x").focus();
+}
+function onBind(e){
+  var el=e.target;
+  var p=el.getAttribute("data-bind");if(!p||!edit)return;
+  var v=el.type==="checkbox"?el.checked:el.value;
+  setPath(edit.draft,p,v);
+  edit.dirty=true;
+  updateLive();
+}
+function updateLive(){
+  var d=edit.draft;
+  if(edit.tab==="comp"){
+    var total=(d.f.lines||[]).reduce(function(a,l){return a+(Number(l.pct)||0);},0);
+    var chip=$("#compTotal");
+    if(chip){chip.className="total-chip "+(Math.abs(total-100)<0.011?"ok":"bad");chip.textContent="Total "+fmtPct(total)+(Math.abs(total-100)<0.011?"":" — must be 100%");}
+    var bar=$("#compBar");
+    if(bar)bar.innerHTML=(d.f.lines||[]).map(function(l,i){var c=matName(l.code);var hue=c==="Others"?"#8a8a8c":HUES[i%HUES.length];return '<i style="width:'+(Number(l.pct)||0)+"%;background:"+hue+'" title="'+esc(c)+" "+fmtPct(Number(l.pct)||0)+'"></i>';}).join("");
+    $all("#wmBody [data-name-for]").forEach(function(td){
+      var idx=+td.getAttribute("data-name-for");var ln=d.f.lines[idx];
+      td.textContent=ln?matName(ln.code):"";
+    });
+  }else if(edit.tab==="lab"){
+    var wb=$("#specWriteback");
+    if(wb){
+      var ph=null,visc=null;
+      (d.lab&&d.lab.specs||[]).forEach(function(s){
+        var p=String(s.parameter||"").toLowerCase();
+        if(/\bph\b/.test(p)){var r=parseRange(s.std);if(r)ph=r[0]===r[1]?String(r[0]):r[0]+" – "+r[1];}
+        else if(/viskos|viscos/.test(p))visc=s.std||null;
+      });
+      wb.textContent="Write-back to list on save: pH → "+(ph||"(unchanged)")+" · Viscosity → "+(visc||"(unchanged)");
+    }
+  }else if(edit.tab==="stab"){
+    var lr=$("#stabRollup");
+    if(lr&&d.stab){var ru=rollup(d.stab);lr.innerHTML=CONDS.map(function(c){var s=STAB[ru[c]]||STAB["-"];return '<span class="li"><span class="ffs-lamp '+s.cls+'"></span>'+c+" · "+s.word+"</span>";}).join("");}
+  }else if(edit.tab==="machine"){
+    $all("#wmBody [data-vpill]").forEach(function(span){
+      var path=span.getAttribute("data-vpill");
+      var m=mixerOf(getPath(edit.draft,path));
+      span.textContent=m?m.vessel:"";span.style.display=m&&m.vessel?"":"none";
+    });
+  }
+}
+function renderTab(){
+  var body=$("#wmBody");if(!body||!edit)return;
+  var d=edit.draft;
+  var html="";
+  if(edit.importInfo&&edit.tab===(edit.importInfo.tab||"comp")){
+    html+='<div class="import-banner">Imported from <b>'+esc(edit.importInfo.fileName)+"</b> — check every value before saving. Nothing is written until you confirm.</div>";
+  }
+  if(edit.tab==="comp")html+=compTab(d);
+  else if(edit.tab==="lab")html+=d.lab?labTab(d):emptyPart("lab","product specification");
+  else if(edit.tab==="stab")html+=d.stab?stabTab(d):emptyPart("stab","test result");
+  else html+=d.machine?machineTab(d):emptyPart("machine","machine setup");
+  body.innerHTML=html;
+  updateLive();
+}
+function toolbar(kind){
+  return '<div class="tab-toolbar"><span class="sp"></span><button class="btn btn-sm" data-act="import" data-kind="'+kind+'">Import PDF</button></div>';
+}
+function fld(label,inner,cls,help){
+  return '<div class="fld'+(cls?" "+cls:"")+'"><label class="lbl">'+esc(label)+"</label>"+inner+(help?'<span class="help">'+esc(help)+"</span>":"")+"</div>";
+}
+function inp(path,val,attrs){return '<input class="input" data-bind="'+path+'" value="'+esc(val==null?"":val)+'"'+(attrs||"")+">";}
+function sel(path,val,opts){
+  return '<select class="input" data-bind="'+path+'">'+opts.map(function(o){
+    var v=Array.isArray(o)?o[0]:o,t=Array.isArray(o)?o[1]:o;
+    return '<option value="'+esc(v)+'"'+(String(val)===String(v)?" selected":"")+">"+esc(t)+"</option>";
+  }).join("")+"</select>";
+}
+function compTab(d){
+  var f=d.f;
+  var h=toolbar("comp");
+  h+='<div class="form-grid">'+
+    fld("Formula Code",inp("f.id",f.id,edit.isNew?' placeholder="e.g. FM03SC05MM"':' readonly aria-readonly="true"'),"",edit.isNew?"The doc Kode — assigned by R&D, not the ISO FFS number.":"Locked — the Formula Code keys all four parts.")+
+    fld("Category",sel("f.kategori",f.kategori,[""].concat(CATS)))+
+    fld("Customer",sel("f.customer",f.customer,[""].concat(CUSTOMERS)))+
+    fld("Product name",inp("f.productName",f.productName))+
+    fld("Variant",inp("f.variant",f.variant))+
+    fld("PDR No. (Marketing)",inp("f.pdrNo",f.pdrNo))+
+    fld("BJ (g/mL)",inp("f.bj",f.bj,' type="number" step="0.01" min="0"'))+
+    fld("pH min (25°C)",inp("f.phMin",f.phMin,' type="number" step="0.1"'))+
+    fld("pH max (25°C)",inp("f.phMax",f.phMax,' type="number" step="0.1"'))+
+    fld("Viscosity (cP)",inp("f.viscosity",f.viscosity,' placeholder="e.g. 15000 – 25000"'),"span-2")+
+    fld("Note",'<textarea class="input" rows="2" data-bind="f.note">'+esc(f.note||"")+"</textarea>","span-3")+
+  "</div>";
+  h+='<div class="sub-sec">Special-material handling (FFS tab 5)</div>';
+  h+='<table class="ed"><thead><tr><th style="width:26%">Material</th><th>Handling before weighing</th><th style="width:40px"></th></tr></thead><tbody>';
+  (f.specialHandling||[]).forEach(function(s,i){
+    h+="<tr><td>"+inp("f.specialHandling."+i+".mat",s.mat)+"</td><td>"+inp("f.specialHandling."+i+".how",s.how)+'</td><td><button class="btn btn-danger btn-sm" data-act="del-special" data-i="'+i+'" aria-label="Remove handling row">×</button></td></tr>';
+  });
+  if(!(f.specialHandling||[]).length)h+='<tr><td colspan="3" class="empty">No special handling listed.</td></tr>';
+  h+='</tbody></table><div style="margin-top:6px"><button class="btn btn-sm" data-act="add-special">+ Add handling</button></div>';
+  h+='<div class="sub-sec">Composition (w/w%) — 100% ratio basis</div>';
+  h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="total-chip ok" id="compTotal"></span><span class="hint" style="margin:0">Percentages must total 100% to save.</span></div>';
+  h+='<div class="cbar" id="compBar"></div>';
+  h+='<table class="ed"><thead><tr><th style="width:150px">Code</th><th>Material</th><th style="width:110px">%</th><th style="width:40px"></th></tr></thead><tbody>';
+  (f.lines||[]).forEach(function(ln,i){
+    h+="<tr><td>"+inp("f.lines."+i+".code",ln.code,' list="matList"')+'</td><td class="mat-name" data-name-for="'+i+'"></td><td>'+inp("f.lines."+i+".pct",ln.pct,' type="number" step="0.1" min="0"')+'</td><td><button class="btn btn-danger btn-sm" data-act="del-line" data-i="'+i+'" aria-label="Remove material line">×</button></td></tr>';
+  });
+  if(!(f.lines||[]).length)h+='<tr><td colspan="4" class="empty">No composition lines yet — add materials or import the FFS PDF.</td></tr>';
+  h+='</tbody></table><div style="margin-top:6px"><button class="btn btn-sm" data-act="add-line">+ Add material</button></div>';
+  h+='<datalist id="matList">'+Object.keys(MATS).map(function(c){return '<option value="'+c+'">'+esc(MATS[c])+"</option>";}).join("")+"</datalist>";
+  return h;
+}
+function labTab(d){
+  var s=d.lab;
+  var h=toolbar("lab");
+  h+='<div class="form-grid">'+
+    fld("Expiry / shelf life",inp("lab.expiry",s.expiry,' placeholder="e.g. 3 years"'))+
+    fld("SPR / lab reference",inp("lab.sprRef",s.sprRef))+
+    fld("Storage condition",inp("lab.storageTemp",s.storageTemp,' placeholder="e.g. 18–27 °C"'))+
+  "</div>";
+  h+='<div class="sub-sec">Specification parameters (FFS tab 7) — the standard QA tests against</div>';
+  h+='<table class="ed"><thead><tr><th style="width:24%">Parameter</th><th style="width:34%">Standard / spec</th><th>Method / instrument</th><th style="width:40px"></th></tr></thead><tbody>';
+  (s.specs||[]).forEach(function(sp,i){
+    h+="<tr><td>"+inp("lab.specs."+i+".parameter",sp.parameter)+"</td><td>"+inp("lab.specs."+i+".std",sp.std)+"</td><td>"+inp("lab.specs."+i+".method",sp.method)+'</td><td><button class="btn btn-danger btn-sm" data-act="del-spec" data-i="'+i+'" aria-label="Remove parameter">×</button></td></tr>';
+  });
+  if(!(s.specs||[]).length)h+='<tr><td colspan="4" class="empty">No specification parameters yet.</td></tr>';
+  h+='</tbody></table><div style="margin-top:6px"><button class="btn btn-sm" data-act="add-spec">+ Add parameter</button></div>';
+  h+='<p class="hint" id="specWriteback"></p>';
+  h+=fld("Note",'<textarea class="input" rows="2" data-bind="lab.note">'+esc(s.note||"")+"</textarea>","span-3");
+  return h;
+}
+function stabTab(d){
+  var t=d.stab;
+  var h=toolbar("stab");
+  h+='<div class="form-grid">'+
+    fld("Panel / sensory ref",inp("stab.panelRef",t.panelRef))+
+    fld("Stability ref",inp("stab.stabRef",t.stabRef))+
+    fld("Microbiology ref",inp("stab.microRef",t.microRef))+
+    fld("Compatibility ref",inp("stab.compatRef",t.compatRef))+
+    fld("Start date",inp("stab.startDate",t.startDate,' type="date"'))+
+    fld("Protocol",inp("stab.protocol",t.protocol,' placeholder="e.g. 12 weeks, 4 conditions"'))+
+    fld("Weeks total",inp("stab.weeksTotal",t.weeksTotal,' type="number" min="0" step="1"'))+
+    fld("Weeks observed",inp("stab.weeksObserved",t.weeksObserved,' type="number" min="0" step="1"'))+
+  "</div>";
+  h+='<div class="sub-sec">Roll-up lamps — latest observation per condition</div><div class="lamp-row" id="stabRollup"></div>';
+  h+='<div class="sub-sec">Observations per cycle (FFS tab 2)</div>';
+  h+='<table class="ed"><thead><tr><th style="width:100px">Condition</th><th style="width:120px">Status</th><th style="width:80px">Week</th><th>Observation</th><th style="width:40px"></th></tr></thead><tbody>';
+  (t.obs||[]).forEach(function(o,i){
+    h+="<tr><td>"+sel("stab.obs."+i+".cond",o.cond,CONDS)+"</td><td>"+sel("stab.obs."+i+".status",o.status,STAB_OPTS)+"</td><td>"+inp("stab.obs."+i+".week",o.week,' type="number" min="0" step="1"')+"</td><td>"+inp("stab.obs."+i+".note",o.note)+'</td><td><button class="btn btn-danger btn-sm" data-act="del-obs" data-i="'+i+'" aria-label="Remove observation">×</button></td></tr>';
+  });
+  if(!(t.obs||[]).length)h+='<tr><td colspan="5" class="empty">No observations yet.</td></tr>';
+  h+='</tbody></table><div style="margin-top:6px"><button class="btn btn-sm" data-act="add-obs">+ Add observation</button></div>';
+  h+='<p class="hint">The latest observation per condition (TK / TKUL / T50 / TM) feeds the Master Formula stability lamps on save.</p>';
+  h+=fld("Note",'<textarea class="input" rows="2" data-bind="stab.note">'+esc(t.note||"")+"</textarea>","span-3");
+  return h;
+}
+function machineTab(d){
+  var m=d.machine;
+  var mixOpts=[["","(select machine)"]].concat(MIXERS.map(function(x){return [x.id,x.id+" — "+x.name+" ("+x.cap+" kg)"];}));
+  var h=toolbar("machine");
+  h+='<div class="form-grid">'+fld("Vacuum",inp("machine.vacuum",m.vacuum,' placeholder="e.g. -0.6 bar during homogenizing"'),"span-2")+"</div>";
+  h+='<div class="sub-sec">Equipment used (FFS tab 4)</div>';
+  (m.equipment||[]).forEach(function(eq,i){
+    h+='<div class="eq-row">'+inp("machine.equipment."+i,eq)+'<button class="btn btn-danger btn-sm" data-act="del-eq" data-i="'+i+'" aria-label="Remove equipment">×</button></div>';
+  });
+  if(!(m.equipment||[]).length)h+='<p class="hint" style="margin:0 0 6px">No equipment listed yet.</p>';
+  h+='<div><button class="btn btn-sm" data-act="add-eq">+ Add equipment</button></div>';
+  h+='<div class="sub-sec">Work instruction — Phase → step → machine (FFS tab 6 → BMR)</div>';
+  (m.phases||[]).forEach(function(p,pi){
+    h+='<div class="sub-phase"><div class="sub-ph-head">'+inp("machine.phases."+pi+".name",p.name,' placeholder="Phase name, e.g. Phase I — Oil Phase"')+'<button class="btn btn-danger btn-sm" data-act="del-phase" data-p="'+pi+'">× phase</button></div>';
+    (p.steps||[]).forEach(function(st,si){
+      var base="machine.phases."+pi+".steps."+si;
+      h+='<div class="sub-step"><div class="step-tag">Step '+(pi+1)+"."+(si+1)+(st.ccp?'<span class="ccp">CCP</span>':"")+"</div>";
+      h+='<div class="form-grid">'+
+        fld("Materials (codes / names)",inp(base+".materials",(st.materials||[]).join(", "),' placeholder="comma-separated"'),"span-2")+
+        fld("Vessel",inp(base+".vessel",st.vessel))+
+        fld("Output label",inp(base+".outputLabel",st.outputLabel))+
+        fld("Work instruction (protap)",'<textarea class="input" rows="2" data-bind="'+base+'.instruction">'+esc(st.instruction||"")+"</textarea>","span-3")+
+      "</div>";
+      h+='<label class="check-row"><input type="checkbox" data-bind="'+base+'.ccp"'+(st.ccp?" checked":"")+"> Critical control point (CCP)</label>";
+      h+=fld("CCP note / critical limit",inp(base+".ccpNote",st.ccpNote),"span-3");
+      h+='<div class="sub-sec" style="margin:12px 0 4px">Machine parameters (per batch size)</div>';
+      (st.params||[]).forEach(function(pm,mi){
+        var pb=base+".params."+mi;
+        h+='<div class="sub-param"><div class="sub-ps-head">'+sel(pb+".mixerId",pm.mixerId,mixOpts)+inp(pb+".batchLabel",pm.batchLabel,' placeholder="Batch size, e.g. 500 kg" style="max-width:170px"')+'<span class="vpill" data-vpill="'+pb+'.mixerId"></span><button class="btn btn-danger btn-sm" data-act="del-param" data-p="'+pi+'" data-s="'+si+'" data-m="'+mi+'">× machine</button></div>';
+        h+='<table class="chan"><tbody>';
+        CHANNELS.forEach(function(ch){
+          h+="<tr><td>"+ch[1]+"</td><td>"+inp(pb+"."+ch[0],pm[ch[0]],' placeholder="e.g. 75–80"')+"</td><td>"+ch[2]+"</td></tr>";
+        });
+        h+="<tr><td>Time type</td><td>"+sel(pb+".timeType",pm.timeType,TIME_TYPES)+"</td><td>—</td></tr>";
+        h+="</tbody></table></div>";
+      });
+      if(!(st.params||[]).length)h+='<p class="hint" style="margin:0">No machine parameter set yet.</p>';
+      h+='<div style="margin-top:6px;display:flex;gap:8px"><button class="btn btn-sm" data-act="add-param" data-p="'+pi+'" data-s="'+si+'">+ Add machine</button><button class="btn btn-danger btn-sm" data-act="del-step" data-p="'+pi+'" data-s="'+si+'">× step</button></div>';
+      h+="</div>";
+    });
+    h+='<div style="padding:8px 10px"><button class="btn btn-sm" data-act="add-step" data-p="'+pi+'">+ Add step</button></div></div>';
+  });
+  if(!(m.phases||[]).length)h+='<p class="hint" style="margin:0 0 6px">No work-instruction phases yet.</p>';
+  h+='<div style="margin-top:6px"><button class="btn btn-sm" data-act="add-phase">+ Add phase</button></div>';
+  h+='<p class="hint">One step can run on several machines / batch sizes — each param-set is keyed by the mixer dropdown. The work instruction here is the protap the BMR re-prints.</p>';
+  h+=fld("Note",'<textarea class="input" rows="2" data-bind="machine.note">'+esc(m.note||"")+"</textarea>","span-3");
+  return h;
+}
+function emptyPart(kind,name){
+  return toolbar(kind)+'<div class="empty-part"><p>No '+name+" record for this Formula Code yet.</p><button class=\"btn btn-sm btn-primary\" data-act=\"add-part\" data-kind=\""+kind+"\">+ Add "+name+"</button></div>";
+}
+
+/* ---------- structural actions ---------- */
+function handleAction(a,b){
+  if(!edit&&["add-line","del-line","add-spec","del-spec","add-obs","del-obs","add-eq","del-eq","add-phase","del-phase","add-step","del-step","add-param","del-param","add-special","del-special","add-part","import"].indexOf(a)>=0)return;
+  var d=edit?edit.draft:null,i=+(b.getAttribute("data-i")||0),pi=+(b.getAttribute("data-p")||0),si=+(b.getAttribute("data-s")||0),mi=+(b.getAttribute("data-m")||0);
+  switch(a){
+    case "add-line":d.f.lines.push({code:"",pct:0});break;
+    case "del-line":d.f.lines.splice(i,1);break;
+    case "add-special":d.f.specialHandling.push({mat:"",how:""});break;
+    case "del-special":d.f.specialHandling.splice(i,1);break;
+    case "add-spec":d.lab.specs.push({parameter:"",std:"",method:""});break;
+    case "del-spec":d.lab.specs.splice(i,1);break;
+    case "add-obs":d.stab.obs.push({cond:"TK",status:"-",week:d.stab.weeksObserved||0,note:""});break;
+    case "del-obs":d.stab.obs.splice(i,1);break;
+    case "add-eq":d.machine.equipment.push("");break;
+    case "del-eq":d.machine.equipment.splice(i,1);break;
+    case "add-phase":d.machine.phases.push({name:"",steps:[newStep()]});break;
+    case "del-phase":d.machine.phases.splice(pi,1);break;
+    case "add-step":d.machine.phases[pi].steps.push(newStep());break;
+    case "del-step":d.machine.phases[pi].steps.splice(si,1);break;
+    case "add-param":d.machine.phases[pi].steps[si].params.push(newParam());break;
+    case "del-param":d.machine.phases[pi].steps[si].params.splice(mi,1);break;
+    case "add-part":
+      var k=b.getAttribute("data-kind");
+      d[k==="lab"?"lab":k==="stab"?"stab":"machine"]=k==="lab"?emptyLab():k==="stab"?emptyStab():emptyMachine();
+      break;
+    case "import":doImport(b.getAttribute("data-kind"));return;
+    default:return;
+  }
+  edit.dirty=true;renderTab();
+  var p=presence();
+  $all("#modalRoot .wm-tab").forEach(function(t){
+    var k=t.getAttribute("data-tab"),mark=t.querySelector(".ok,.miss");
+    if(mark){mark.className=p[k]?"ok":"miss";mark.textContent=p[k]?"✓":"—";}
+  });
+}
+/* Import wiring carried over from the removed list-level "Import from PDF".
+   Production: each tab's Import PDF calls OCRImport.parsePdf(file, Store.ocrConfig(IMPORT_CFG[kind])).
+   comp uses the LIVE formula webhook (the one the old list button used); lab/stab/machine
+   webhooks are not built yet, so those parses are simulated here. No backend name is shown to users. */
+var IMPORT_CFG={comp:"formula",lab:"lab",stab:"stab",machine:"machine"};
+function doImport(kind){
+  var cfg=(db.webhooks||{})[IMPORT_CFG[kind]]||{};
+  if(!cfg.url||!cfg.token){toast("Import isn't configured for this part yet — add its webhook in Settings & Data.","err");return;}
+  pickPdf(function(fileName){
+    var done=spinner("Parsing "+fileName+"… usually 10–30 s");
+    setTimeout(function(){
+      done();
+      var d=edit.draft;
+      if(kind==="comp"){
+        if(edit.isNew){
+          var sample=seed().formulas[8];
+          ["kategori","customer","productName","variant","bj","phMin","phMax","viscosity","pdrNo","lines","specialHandling"].forEach(function(k){d.f[k]=clone(sample[k]);});
+          if(!d.f.id)d.f.id="FM03SC05MM";
+          edit.importInfo={fileName:fileName,tab:"comp"};
+        }else{
+          toast("Parsed composition matches the current recipe — no changes applied");
+          return;
+        }
+      }else if(kind==="lab"){
+        if(!d.lab)d.lab=emptyLab();
+        d.lab=mkLab(d.f,{sprRef:"SPR-"+(d.f.id||"NEW").slice(0,6)+"-01"});
+      }else if(kind==="stab"){
+        if(!d.stab)d.stab=emptyStab();
+        var refs=d.stab;
+        d.stab=mkStab(d.f.id?d.f:{id:"NEW000"},["Running","-","-","-"],1,today());
+        d.stab.panelRef=refs.panelRef;d.stab.stabRef=refs.stabRef;d.stab.microRef=refs.microRef;d.stab.compatRef=refs.compatRef;
+      }else{
+        if(!d.machine)d.machine=emptyMachine();
+        d.machine={vacuum:"-0.5 bar during homogenizing",equipment:["CKL machine 500 kg","Homogenizer","Heater","Vacuum pump"],phases:[
+          phase("Phase I — Phase A",[step(["RM-2001","RM-2002"],"CKL kettle","Bulk A","Heat phase A to 75–80 °C while stirring.",false,"",[ps("MX-CKL500","500 kg",{suhu:"75–80",mixer:"40",time:"25"})])]),
+          phase("Phase II — Emulsification",[step(["RM-1001","RM-1002"],"CKL machine","Bulk B","Add the water phase to the oil phase slowly while homogenizing.",true,"CCP-1: temperature ≥ 75 °C",[ps("MX-CKL500","500 kg",{suhu:"75–80",homogenizer:"3000",time:"20",timeType:"Mixing"})])])
+        ],note:"",status:"Draft"};
+      }
+      edit.dirty=true;
+      if(kind!=="comp")edit.importInfo={fileName:fileName,tab:kind};
+      renderModal();
+      toast("Parsed "+fileName+" — review the values, then Save as Draft");
+    },1500);
+  });
+}
+
+/* ---------- save ---------- */
+function saveDraft(){
+  var d=edit.draft,f=d.f;
+  f.id=String(f.id||"").trim();
+  if(!f.id){toast("Formula Code is required","err");return;}
+  if(!String(f.productName||"").trim()){toast("Product name is required","err");return;}
+  if(edit.isNew&&formulaOf(f.id)){toast("Formula "+f.id+" already exists","err");return;}
+  var total=(f.lines||[]).reduce(function(a,l){return a+(Number(l.pct)||0);},0);
+  if(!(f.lines||[]).length||Math.abs(total-100)>=0.011){toast("Composition must total 100% (currently "+fmtPct(total)+")","err");return;}
+  f.bj=Number(f.bj)||1;
+  f.lines=f.lines.map(function(l){return {code:String(l.code||"").trim(),pct:Number(l.pct)||0};}).filter(function(l){return l.code;});
+  /* write-back: submodule specs own pH / viscosity / lamps */
+  if(d.lab){
+    (d.lab.specs||[]).forEach(function(s){
+      var p=String(s.parameter||"").toLowerCase();
+      if(/\bph\b/.test(p)){var r=parseRange(s.std);if(r){f.phMin=r[0];f.phMax=r[1];}}
+      else if(/viskos|viscos/.test(p))f.viscosity=s.std||"";
+    });
+    d.lab.status="Draft";d.lab.updated=today();
+  }
+  if(d.stab){
+    var ru=rollup(d.stab);
+    f.stabTk=ru.TK;f.stabTkul=ru.TKUL;f.stabT50=ru.T50;f.stabTm=ru.TM;
+    d.stab.status="Draft";d.stab.updated=today();
+  }
+  if(d.machine){d.machine.status="Draft";d.machine.updated=today();}
+  var idx=-1;
+  for(var i=0;i<db.formulas.length;i++)if(db.formulas[i].id===f.id){idx=i;break;}
+  if(idx>=0)db.formulas[idx]=clone(f);else db.formulas.push(clone(f));
+  if(d.lab)db.lab[f.id]=clone(d.lab);
+  if(d.stab)db.stab[f.id]=clone(d.stab);
+  if(d.machine)db.machine[f.id]=clone(d.machine);
+  persist();
+  var id=f.id,wasNew=edit.isNew;
+  view.open=id;
+  closeEditor();drawList();
+  toast((wasNew?"Formula "+id+" created":"Formula "+id+" saved")+" as Draft");
+}
+
+/* ---------- admin: Settings & Data (import webhooks) ---------- */
+var WH_KINDS=[["formula","Composition"],["lab","Product Specification"],["stab","Test Result"],["machine","Machine Setup"]];
+function renderSettings(){
+  var stage=$("#stage");
+  var h='<div class="page-head"><h2>Settings &amp; Data</h2><p>Admin configuration for Master Formula PDF import. Each part imports through its own webhook; the Import PDF button on a tab is enabled only once its webhook URL and token are saved here. Values are stored locally in this mockup.</p></div>';
+  h+='<div class="set-card"><h3>Formula import webhooks</h3><p class="hint">One webhook per document type. The composition slot is pre-connected to the live formula webhook; fill the others when their workflows are deployed.</p>';
+  WH_KINDS.forEach(function(k){
+    var cur=(db.webhooks||{})[k[0]]||{};
+    h+='<div class="set-kind"><div class="k">'+esc(k[1])+'</div><div class="form-grid">'+
+      fld("Webhook URL",'<input class="input" data-wh="'+k[0]+'.url" value="'+esc(cur.url||"")+'" placeholder="https://…/webhook/astoria/'+k[0]+'-ocr">',"span-2")+
+      fld("Token",'<input class="input" type="password" data-wh="'+k[0]+'.token" value="'+esc(cur.token||"")+'" placeholder="Access token">')+
+    '</div></div>';
+  });
+  h+='<div style="margin-top:12px"><button class="btn btn-primary" data-act="save-webhooks">Save webhooks</button></div></div>';
+  stage.innerHTML=h;
+}
+function setView(v){
+  $all(".sidenav a[data-nav]").forEach(function(a){
+    var on=a.getAttribute("data-nav")===v;
+    a.classList.toggle("on",on);
+    if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");
+  });
+  if(v==="settings")renderSettings();else renderStage();
+}
+
+/* ---------- global actions ---------- */
+root.addEventListener("click",function(e){
+  var nav=e.target.closest("[data-nav]");
+  if(nav){setView(nav.getAttribute("data-nav"));return;}
+  var b=e.target.closest("[data-act]");if(!b)return;
+  var a=b.getAttribute("data-act");
+  if(a==="reset-demo"){
+    confirmDialog("Reset demo data?","All local edits are discarded and the original sample formulas are restored.","Reset",true,function(){
+      var wh=db.webhooks;db=seed();db.webhooks=wh||defaultWebhooks();persist();view.open=null;view.page=1;drawList();toast("Demo data restored");
+    });
+  }else if(a==="new-formula"){openEditor(null);}
+  else if(a==="save-webhooks"){
+    $all("#stage [data-wh]").forEach(function(el){setPath(db.webhooks,el.getAttribute("data-wh"),el.value.trim());});
+    persist();toast("Import webhooks saved");
+  }
+  else if(a==="clear-filters"){
+    view.q="";view.kat="";view.stab="";view.page=1;renderStage();
+  }
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    if($("#confirmRoot").innerHTML){closeConfirm();return;}
+    if(edit){attemptClose();return;}
+  }
+  if(e.key==="Tab"&&edit){
+    var modal=$("#modalRoot .wmodal");if(!modal)return;
+    var foc=Array.prototype.slice.call(modal.querySelectorAll('button,input,select,textarea,[tabindex]:not([tabindex="-1"])')).filter(function(el){return !el.disabled&&el.offsetParent!==null;});
+    if(!foc.length)return;
+    var first=foc[0],last=foc[foc.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
+});
+
+renderStage();
+})();
+</script>
+</body>
+</html>

@@ -18,3 +18,7 @@ desktop.ini
 
 # --- IDE / agent local cache ---
 .qoder/
+.impeccable/
+
+# --- generated design/mockup reference images (large, local-only) ---
+vibe_images/

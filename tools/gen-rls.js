@@ -58,6 +58,8 @@ var ALL = RBAC.ROLES.slice();
 var GROUPS = [
   ["Master data (owned per rbac.js MASTER_EDITORS / FG_EDITOR_ROLES)",
     ["fg_master", "m_customer", "m_supplier", "m_formula", "m_packaging", "m_mixer"]],
+  ["FFS submodules (migration 017) - same owner as m_formula",
+    ["m_formula_lab", "m_formula_stab", "m_formula_machine"]],
   ["Open masters - the UI does not role-gate these, so every staff account may write",
     ["materials", "boms", "bom_lines", "sims", "requests", "meta_kv"]],
   ["Sales order + PPIC planning",
@@ -78,6 +80,9 @@ var W = {
   m_formula:         U(RBAC.MASTER_EDITORS.formulas),
   m_packaging:       U(RBAC.MASTER_EDITORS.packagings),
   m_mixer:           U(RBAC.MASTER_EDITORS.mixers),
+  m_formula_lab:     U(RBAC.MASTER_EDITORS.formulas),
+  m_formula_stab:    U(RBAC.MASTER_EDITORS.formulas),
+  m_formula_machine: U(RBAC.MASTER_EDITORS.formulas),
 
   materials:         U(ALL), boms: U(ALL), bom_lines: U(ALL),
   sims:              U(ALL), requests: U(ALL), meta_kv: U(ALL),

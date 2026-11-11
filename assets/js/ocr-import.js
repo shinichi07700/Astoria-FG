@@ -62,13 +62,17 @@ window.OCRImport = (function () {
     var f = (payload && payload.formula) || {};
     var warnings = [].concat((payload && payload.warnings) || []);
     var draft = {
-      id: String(f.ffs == null ? "" : f.ffs).trim(),
+      id: codeOf(f),
       kategori: String(f.kategori == null ? "" : f.kategori).trim(),
       customerId: "", urutan: 0,
       bj: 1, phMin: "", phMax: "",
       viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
       productName: String(f.productName == null ? "" : f.productName).trim(),
       variant: String(f.variant == null ? "" : f.variant).trim(),
+      pdrNo: str(f.pdrNo || f.pdr),
+      specialHandling: (Array.isArray(f.specialHandling) ? f.specialHandling : []).map(function (s) {
+        s = s || {}; return { material: str(s.material), handling: str(s.handling || s.note) };
+      }).filter(function (s) { return s.material || s.handling; }),
       note: String(f.note == null ? "" : f.note).trim(),
       lines: []
     };
@@ -110,12 +114,20 @@ window.OCRImport = (function () {
     var c = window.ASTORIA_OCR || {};
     return !!(c.webhookUrl && c.token);
   }
+  function configuredCfg(cfg) {
+    return !!(cfg && cfg.webhookUrl && cfg.token);
+  }
   /* POSTs the file to the n8n webhook. Every rejection message is
-     written to be shown to the user as-is. */
+     written to be shown to the user as-is. opts.webhookUrl / opts.token
+     select a per-document-type workflow (Settings & Data); without them
+     the shipped formula webhook is used. */
   function parsePdf(file, opts) {
     opts = opts || {};
-    var cfg = window.ASTORIA_OCR || {};
-    if (!configured()) return Promise.reject(new Error("OCR import is not configured - fill webhookUrl and token in supabase-config.js"));
+    var cfg = {
+      webhookUrl: opts.webhookUrl || (window.ASTORIA_OCR || {}).webhookUrl,
+      token: opts.token || (window.ASTORIA_OCR || {}).token
+    };
+    if (!configuredCfg(cfg)) return Promise.reject(new Error("OCR import is not configured - fill webhookUrl and token in Settings & Data (or supabase-config.js)"));
     if (!/\.pdf$/i.test(String((file && file.name) || ""))) return Promise.reject(new Error("Only .pdf files are supported - convert the Word document to PDF first"));
     if (!file || file.size > 10 * 1024 * 1024) return Promise.reject(new Error("The PDF is larger than 10 MB"));
     var timeoutMs = opts.timeoutMs || 120000;
@@ -149,9 +161,159 @@ window.OCRImport = (function () {
     });
   }
 
-  var api = { configured: configured, norm: norm, num: num, stab: stab,
+  /* ---------- FFS submodule drafts (lab / stability / machine setup) ----------
+     Same tolerant contract as mapToFormulaDraft: unknown keys ignored,
+     unmatched masters become blank + a warning, never an invented value.
+     n8n payload shapes: { ok, lab|stability|machine, warnings, document }. */
+  function str(v) { return String(v == null ? "" : v).trim(); }
+  function matchFormula(raw, db) {
+    var s = str(raw);
+    var hit = s && db && db.formulas ? db.formulas.filter(function (f) { return f.id === s; })[0] : null;
+    return hit || null;
+  }
+  /* The doc "Kode" is the Formula Code. Prompts may emit it as formulaCode,
+     ffs or code - accept any so the user's n8n naming never breaks import. */
+  function codeOf(f) { return str(f.formulaCode || f.ffs || f.code); }
+  function ffsWarning(raw, hit, warnings) {
+    if (!hit) warnings.push(str(raw) ? "Formula '" + str(raw) + "' not found in Master Formula - pick it manually"
+                                     : "Formula Code not found in the document - pick it manually");
+  }
+  function parseSpecs(raw) {
+    var out = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (s) {
+      s = s || {};
+      var parameter = str(s.parameter || s.param || s.name);
+      var std = str(s.std || s.standard || s.spec || s.value);
+      var method = str(s.method || s.instrument);
+      if (parameter || std || method) out.push({ parameter: parameter, std: std, method: method });
+    });
+    return out;
+  }
+  function mapToLabDraft(payload, db) {
+    var f = (payload && (payload.lab || payload.specification)) || {};
+    var warnings = [].concat((payload && payload.warnings) || []);
+    var code = codeOf(f);
+    var hit = matchFormula(code, db);
+    ffsWarning(code, hit, warnings);
+    var draft = {
+      id: hit ? hit.id : code, specs: parseSpecs(f.specs || f.specifications),
+      expiry: str(f.expiry || f.shelfLife), sprRef: str(f.sprRef || f.spr),
+      storageTemp: str(f.storageTemp || f.storage), note: str(f.note), status: "Draft"
+    };
+    var existing = draft.id && db && db.formulaLab ? db.formulaLab.filter(function (x) { return x.id === draft.id; })[0] || null : null;
+    return { draft: draft, warnings: warnings, existing: existing };
+  }
+  var STAB_CONDS = ["TK", "TKUL", "T50", "TM"];
+  function mapToStabDraft(payload, db) {
+    var f = (payload && (payload.stability || payload.testResult)) || {};
+    var warnings = [].concat((payload && payload.warnings) || []);
+    var code = codeOf(f);
+    var hit = matchFormula(code, db);
+    ffsWarning(code, hit, warnings);
+    var obs = [];
+    (Array.isArray(f.obs) ? f.obs : []).forEach(function (o) {
+      o = o || {};
+      var cond = str(o.cond).toUpperCase();
+      if (STAB_CONDS.indexOf(cond) < 0) {
+        if (str(o.cond)) warnings.push("Unknown stability condition '" + str(o.cond) + "' - ignored");
+        return;
+      }
+      obs.push({ cond: cond, status: stab(o.status), note: str(o.note), week: num(o.week) || 0 });
+    });
+    var draft = {
+      id: hit ? hit.id : code, startDate: str(f.startDate), protocol: str(f.protocol),
+      weeksTotal: num(f.weeksTotal) || 0, weeksObserved: num(f.weeksObserved) || 0,
+      obs: obs, panelRef: str(f.panelRef || f.panel), microRef: str(f.microRef || f.micro),
+      compatRef: str(f.compatRef || f.compat), stabRef: str(f.stabRef || f.stabilityRef),
+      note: str(f.note), status: "Draft"
+    };
+    var existing = draft.id && db && db.formulaStab ? db.formulaStab.filter(function (x) { return x.id === draft.id; })[0] || null : null;
+    return { draft: draft, warnings: warnings, existing: existing };
+  }
+  function matchMixer(raw, db) {
+    var s = str(raw);
+    if (!s || !db || !db.mixers) return null;
+    return db.mixers.filter(function (m) { return m.id === s; })[0] ||
+      db.mixers.filter(function (m) { return String(m.name || "").trim().toLowerCase() === s.toLowerCase(); })[0] || null;
+  }
+  function parseEquipment(raw) {
+    return (Array.isArray(raw) ? raw : []).map(function (e) {
+      return typeof e === "string" ? str(e) : str(e && (e.name || e.equipment));
+    }).filter(Boolean);
+  }
+  /* One machine / batch-size param-set. Expected prompt keys: machine (name or
+     id), batchLabel, suhu, homogenizer, disperser, mixer (Hz), scraper, time,
+     timeType. The machine is matched to the mixer catalogue; an unmatched name
+     becomes blank + a warning, never an invented id. */
+  function parseParamSet(ps, db, warnings) {
+    ps = ps || {};
+    var rawMachine = str(ps.machine || ps.mixerId || ps.mixerName);
+    var m = matchMixer(rawMachine, db);
+    if (rawMachine && !m) warnings.push("Machine '" + rawMachine + "' not found in catalogue - pick it manually");
+    var tt = str(ps.timeType);
+    return {
+      mixerId: m ? m.id : "", batchLabel: str(ps.batchLabel || ps.batch || ps.batchSize),
+      suhu: str(ps.suhu || ps.temp), homogenizer: str(ps.homogenizer), disperser: str(ps.disperser),
+      mixer: str(ps.mixerSpeed || ps.mixerHz || ps.mixer), scraper: str(ps.scraper),
+      time: str(ps.time || ps.minutes),
+      timeType: ["Pengadukan", "Mixing", "Pendinginan"].indexOf(tt) >= 0 ? tt : "Pengadukan"
+    };
+  }
+  function parsePhases(raw, db, warnings) {
+    var phases = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (p) {
+      p = p || {};
+      var name = str(p.name);
+      var steps = [];
+      if (Array.isArray(p.steps) && p.steps.length) {
+        p.steps.forEach(function (st) {
+          st = st || {};
+          var mats = Array.isArray(st.materials)
+            ? st.materials.map(function (x) { return str(x); }).filter(Boolean)
+            : str(st.materials).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+          var params = (Array.isArray(st.params) ? st.params : []).map(function (ps) { return parseParamSet(ps, db, warnings); });
+          if (!params.length) params = [parseParamSet(st, db, warnings)];
+          steps.push({
+            materials: mats, instruction: str(st.instruction || st.note), vessel: str(st.vessel),
+            ccp: !!st.ccp, ccpNote: str(st.ccpNote), outputLabel: str(st.outputLabel || st.output), params: params
+          });
+        });
+      } else if (name || str(p.temp) || str(p.rpm) || p.minutes != null || str(p.note)) {
+        /* Legacy flat phase -> one step. The ambiguous rpm is kept in the
+           instruction text so no extracted value is silently lost. */
+        var instr = str(p.note);
+        if (str(p.rpm)) instr = (instr ? instr + " " : "") + "[speed: " + str(p.rpm) + " rpm]";
+        steps.push({
+          materials: [], instruction: instr, vessel: str(p.vessel), ccp: false, ccpNote: "", outputLabel: "",
+          params: [parseParamSet({ suhu: str(p.temp), time: str(p.minutes), machine: str(p.mixer) }, db, warnings)]
+        });
+      }
+      if (name || steps.length) phases.push({ name: name, steps: steps });
+    });
+    return phases;
+  }
+  function mapToMachineDraft(payload, db) {
+    var f = (payload && payload.machine) || {};
+    var warnings = [].concat((payload && payload.warnings) || []);
+    var code = codeOf(f);
+    var hit = matchFormula(code, db);
+    ffsWarning(code, hit, warnings);
+    var rawMixer = str(f.mixer);
+    var mixer = matchMixer(rawMixer, db);
+    if (rawMixer && !mixer) warnings.push("Mixer '" + rawMixer + "' not found in catalogue - pick it manually");
+    var draft = {
+      id: hit ? hit.id : code, mixerId: mixer ? mixer.id : "", mixerName: mixer ? mixer.name : rawMixer,
+      vessel: str(f.vessel), equipment: parseEquipment(f.equipment),
+      phases: parsePhases(f.phases, db, warnings), vacuum: str(f.vacuum), note: str(f.note), status: "Draft"
+    };
+    var existing = draft.id && db && db.formulaMachine ? db.formulaMachine.filter(function (x) { return x.id === draft.id; })[0] || null : null;
+    return { draft: draft, warnings: warnings, existing: existing };
+  }
+
+  var api = { configured: configured, configuredCfg: configuredCfg, norm: norm, num: num, stab: stab,
     matchCustomer: matchCustomer, matchMaterial: matchMaterial,
-    mapToFormulaDraft: mapToFormulaDraft, parsePdf: parsePdf };
+    mapToFormulaDraft: mapToFormulaDraft, mapToLabDraft: mapToLabDraft,
+    mapToStabDraft: mapToStabDraft, mapToMachineDraft: mapToMachineDraft, parsePdf: parsePdf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   return api;
 })();

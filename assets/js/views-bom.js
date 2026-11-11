@@ -117,7 +117,7 @@ window.ViewsBom = (function () {
       if (cur && !list.some(function (m) { return m.id === cur; })) opts.push([cur, cur + "  (not in master)"]);
       return opts;
     }
-    var iFormula = UI.combo(masterOpts(db.formulas, d.formulaId, "(no formula master)"), d.formulaId, "Link FFS formula master...");
+    var iFormula = UI.combo(masterOpts(db.formulas, d.formulaId, "(no formula master)"), d.formulaId, "Link formula master...");
     var iPackaging = UI.combo(masterOpts(db.packagings, d.packagingId, "(no packaging master)"), d.packagingId, "Link FPS packaging master...");
     var formulaRef = UI.el("div", { class: "hint", style: "font-size:11px;color:var(--muted);margin-top:2px" });
     var packagingRef = UI.el("div", { class: "hint", style: "font-size:11px;color:var(--muted);margin-top:2px" });
@@ -132,7 +132,9 @@ window.ViewsBom = (function () {
       var p = iPackaging.value ? Store.packagingById(iPackaging.value) : null;
       packagingRef.textContent = p
         ? "Volume " + Engine.fmtNum(p.volumeMl || 0) + " mL" +
-          (p.fillTolPct ? " \u00b1" + Engine.fmtNum(p.fillTolPct) + "%" : "") +
+          (p.fillMinMl != null && p.fillMaxMl != null
+            ? " (" + Engine.fmtNum(p.fillMinMl) + "\u2013" + Engine.fmtNum(p.fillMaxMl) + " mL)"
+            : (p.fillTolPct ? " \u00b1" + Engine.fmtNum(p.fillTolPct) + "%" : "")) +
           (p.inkjetSyntax ? "  \u00b7  inkjet " + p.inkjetSyntax : "")
         : (iPackaging.value ? "Not in master (dangling link)." : "");
     }
@@ -186,7 +188,7 @@ window.ViewsBom = (function () {
               unit: mat.unit || "gr", supportedBy: "Astoria", lossPct: 0, note: ln.note || ""
             });
           });
-          UI.toast("Formula lines synced from FFS " + newFormulaId + " (" + fMaster.lines.length + " materials)", "ok");
+          UI.toast("Formula lines synced from Formula " + newFormulaId + " (" + fMaster.lines.length + " materials)", "ok");
         }
         lastFormulaId = newFormulaId;
       }

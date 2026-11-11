@@ -57,6 +57,44 @@ Either way **no browser/app change is ever required**: the app ignores unknown k
 missing ones with warnings. The app's prefill map can optionally be updated later if the new
 field should prefill something.
 
+## FFS submodule workflows (lab / stability / machine setup)
+
+Master Formula has four submenus; each imports through **its own public webhook**
+(configured in the app: Settings & Data → "Formula import webhooks (n8n)"). Clone the
+formula workflow three times, swap the prompt per document type, and keep the same
+envelope: `{ "ok": true, "document": {"fileName": ...}, "warnings": [...], "<key>": {...} }`
+where `<key>` is `lab`, `stability` or `machine`. The app maps tolerantly — unknown keys
+are ignored, missing values stay blank with a warning, nothing is invented.
+
+`lab` — lab test parameter results:
+```json
+{ "ffs": "MR03-BN-01", "phResult": 6.1, "viscosity": "24800 cP", "bj": 0.985,
+  "appearance": "Homogeneous, beige", "odor": "Characteristic",
+  "tpc": "< 100 cfu/g", "ym": "negative",
+  "testDate": "2026-11-06", "labRef": "LB-2611-031", "analyst": "S. Wijaya", "note": "" }
+```
+
+`stability` — one observation row per condition per cycle; `cond` is TK / TKUL / T50 / TM,
+`status` is Running / Pass / Fail (anything else becomes "-"):
+```json
+{ "ffs": "MR03-BN-01", "startDate": "2026-10-01", "protocol": "12 weeks, 4 conditions",
+  "weeksTotal": 12, "weeksObserved": 4,
+  "obs": [ { "cond": "TK", "status": "Pass", "week": 4, "note": "no separation" } ],
+  "note": "" }
+```
+
+`machine` — setup parameters that will feed BMR phases; `mixer` matches the mixer
+catalogue by id or name, `phases` stay in execution order:
+```json
+{ "ffs": "MR03-BN-01", "mixer": "V-200", "vessel": "V-200",
+  "phases": [ { "name": "A (oil)", "temp": "75 C", "rpm": "45", "minutes": 25, "note": "" } ],
+  "vacuum": "-0.6 bar during homogenizing", "note": "" }
+```
+
+Suggested webhook paths: `/webhook/astoria/lab-ocr`, `/webhook/astoria/stab-ocr`,
+`/webhook/astoria/machine-ocr`. Until a slot is configured its Import PDF button stays
+hidden. Records save as **Draft**; the approval chain is a later phase.
+
 ## Limitations
 
 - **Digital PDFs only.** The workflow extracts the PDF text layer; there is no vision fallback.

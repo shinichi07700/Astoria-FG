@@ -16,9 +16,9 @@ window.RBAC = (function () {
   var FG_EDITOR_ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory"];
   /* Field ownership inside the F/G editor - who may input/edit which column:
      Admin         -> everything
-     RND Formula   -> FFS code + Deskripsi + Discontinue
+     RND Formula   -> Formula code + Deskripsi + Discontinue
      RND Kemas     -> FPS code + Deskripsi + Discontinue
-     Regulatory    -> FFS code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
+     Regulatory    -> Formula code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
   var FG_FIELD_RIGHTS = {
     "Admin":       { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true },
     "RND Formula": { ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
@@ -193,7 +193,8 @@ window.RBAC = (function () {
      Admin sees everything. The keys match the entity strings used in
      Store.audit() calls across the codebase. */
   var DASH_ENTITIES = {
-    "RND Formula":  ["Master F/G", "Master Formula (FFS)", "Bill of Material"],
+    "RND Formula":  ["Master F/G", "Master Formula (FFS)", "Bill of Material",
+                     "Formula Product Specification", "Formula Test Result", "Formula Machine Setup"],
     "RND Kemas":    ["Master F/G", "Master Packaging (FPS)", "Bill of Material"],
     "Regulatory":   ["Master F/G"],
     "Marketing":    ["Master Customer", "Sales Order", "Master F/G"],

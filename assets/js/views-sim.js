@@ -352,6 +352,32 @@ window.ViewsSim = (function () {
       UI.field("NA expiry warning window (days)", iWarn)
     ])));
 
+    /* One public n8n webhook per Master Formula document type; each workflow
+       owns its OCR prompt. The formula slot falls back to supabase-config.js
+       when left empty so existing installs keep importing. */
+    var WH_KINDS = [["formula", "Composition (formula)"], ["lab", "Product Specification"], ["stab", "Test Result"], ["machine", "Machine Setup"]];
+    var whInputs = {};
+    var whBody = UI.el("div", { class: "form-grid" });
+    WH_KINDS.forEach(function (k) {
+      var cur = (db.meta.ocrWebhooks || {})[k[0]] || {};
+      var iUrl = UI.input({ value: cur.webhookUrl || "", placeholder: "https://<n8n-host>/webhook/astoria/" + k[0] + "-ocr" });
+      var iTok = UI.input({ type: "password", value: cur.token || "", placeholder: "X-Astoria-Token value" });
+      whInputs[k[0]] = [iUrl, iTok];
+      whBody.appendChild(UI.field(k[1] + " - webhook URL", iUrl));
+      whBody.appendChild(UI.field(k[1] + " - token", iTok));
+    });
+    root.appendChild(UI.card("Formula import webhooks (n8n)", [
+      UI.btn("Save webhooks", function () {
+        var map = {};
+        WH_KINDS.forEach(function (k) {
+          map[k[0]] = { webhookUrl: whInputs[k[0]][0].value.trim(), token: whInputs[k[0]][1].value.trim() };
+        });
+        Store.saveOcrWebhooks(map);
+        UI.toast("Import webhooks saved", "ok");
+        App.refresh();
+      }, "btn-primary")
+    ], whBody, { hint: "Master Formula submenus import PDFs through these webhooks; preview before save." }));
+
     root.appendChild(UI.card("Data management", null, UI.el("div", { class: "btn-row" }, [
       UI.btn("Export backup (JSON)", function () { Store.exportJSON(); }),
       UI.btn("Import backup (JSON)", function () {
@@ -371,7 +397,7 @@ window.ViewsSim = (function () {
     /* Audit log housekeeping: cloud-only, because the cloud audit_log is the
        one that grows without bound - the offline audit stays capped at 1000
        rows in this browser. The RPCs behind it re-check the Admin role and
-       the 365-day floor server-side, so this card only shapes parameters. */
+       the 730-day floor server-side, so this card only shapes parameters. */
     if (cloud && window.AuditPrune) {
       function loadAuditStats(vals) {
         Object.keys(vals).forEach(function (k) { vals[k].textContent = "..."; });
@@ -451,8 +477,8 @@ window.ViewsSim = (function () {
 
     root.appendChild(UI.card("Business rules implemented (v1)", null, UI.el("div", { style: "font-size:12.8px;line-height:1.7" }, [
       UI.el("ul", { style: "margin:0;padding-left:18px" }, [
-        UI.el("li", { html: "<b>Kode Produk F/G (col A)</b> = FFS Formula + '-' + FPS Kemas (fallback to whichever exists)." }),
-        UI.el("li", { html: "<b>Status F/G (col C)</b>: Discontinue flag &rarr; Non Aktif; missing FFS or FPS &rarr; Non Aktif; missing Kode NA &rarr; Pending BPOM; expired Tgl Expire NA &rarr; Non Aktif; otherwise Aktif." }),
+        UI.el("li", { html: "<b>Kode Produk F/G (col A)</b> = Formula Code + '-' + FPS Kemas (fallback to whichever exists)." }),
+        UI.el("li", { html: "<b>Status F/G (col C)</b>: Discontinue flag &rarr; Non Aktif; missing Formula or FPS &rarr; Non Aktif; missing Kode NA &rarr; Pending BPOM; expired Tgl Expire NA &rarr; Non Aktif; otherwise Aktif." }),
         UI.el("li", { html: "<b>Audit</b>: every change stores user + WIB timestamp (GMT+7), like columns H and I." }),
         UI.el("li", { html: "<b>BOM</b>: complete material list - section A formula (bulk) raw materials per batch, section B kemas components per piece, with loss %, supported-by and Accurate item codes." }),
         UI.el("li", { html: "<b>Simulation</b>: gross = qty/unit x order qty x (1+loss%). Stocked items: on-hand part &rarr; Material Request, shortage &rarr; Purchase Request. Non-stock items: fully Purchase Request." }),

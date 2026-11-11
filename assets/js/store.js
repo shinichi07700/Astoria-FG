@@ -16,6 +16,10 @@ window.Store = (function () {
     db.customers = db.customers || [];
     db.suppliers = db.suppliers || [];
     db.formulas = db.formulas || [];
+    db.formulaLab = db.formulaLab || [];
+    db.formulaStab = db.formulaStab || [];
+    db.formulaMachine = db.formulaMachine || [];
+    db.meta.ocrWebhooks = db.meta.ocrWebhooks || {};
     db.packagings = db.packagings || [];
     fixPackagingVolume();
     db.mixers = db.mixers || [];
@@ -268,6 +272,12 @@ window.Store = (function () {
       describe: function (s) { return s.id + " " + (s.name || ""); } },
     formula: { table: "m_formula", store: "formulas", key: "id", label: "Master Formula (FFS)",
       describe: function (f) { return f.id + " kategori " + (f.kategori || "-") + " BJ " + (f.bj || 1); } },
+    formulaLab: { table: "m_formula_lab", store: "formulaLab", key: "id", label: "Formula Product Specification",
+      describe: function (r) { return r.id + " " + (r.specs || []).length + " spec params (" + (r.status || "Draft") + ")"; } },
+    formulaStab: { table: "m_formula_stab", store: "formulaStab", key: "id", label: "Formula Test Result",
+      describe: function (r) { return r.id + " week " + (r.weeksObserved || 0) + "/" + (r.weeksTotal || 0) + " (" + (r.status || "Draft") + ")"; } },
+    formulaMachine: { table: "m_formula_machine", store: "formulaMachine", key: "id", label: "Formula Machine Setup",
+      describe: function (r) { return r.id + " " + (r.mixerId || "-") + " " + (r.phases || []).length + " phases (" + (r.status || "Draft") + ")"; } },
     packaging: { table: "m_packaging", store: "packagings", key: "id", label: "Master Packaging (FPS)",
       describe: function (p) {
         return p.id + " " + Engine.fmtNum(p.volumeMl || 0) + " mL"
@@ -302,16 +312,43 @@ window.Store = (function () {
   function saveCustomer(rec, isNew, oldId) { return saveMaster("customer", rec, isNew, oldId); }
   function saveSupplier(rec, isNew, oldId) { return saveMaster("supplier", rec, isNew, oldId); }
   function saveFormula(rec, isNew, oldId) { return saveMaster("formula", rec, isNew, oldId); }
+  function saveFormulaLab(rec, isNew, oldId) { return saveMaster("formulaLab", rec, isNew, oldId); }
+  function saveFormulaStab(rec, isNew, oldId) { return saveMaster("formulaStab", rec, isNew, oldId); }
+  function saveFormulaMachine(rec, isNew, oldId) { return saveMaster("formulaMachine", rec, isNew, oldId); }
   function savePackaging(rec, isNew, oldId) { return saveMaster("packaging", rec, isNew, oldId); }
   function saveMixer(rec, isNew, oldId) { return saveMaster("mixer", rec, isNew, oldId); }
   function deleteCustomer(id) { deleteMaster("customer", id); }
   function deleteSupplier(id) { deleteMaster("supplier", id); }
   function deleteFormula(id) { deleteMaster("formula", id); }
+  function deleteFormulaLab(id) { deleteMaster("formulaLab", id); }
+  function deleteFormulaStab(id) { deleteMaster("formulaStab", id); }
+  function deleteFormulaMachine(id) { deleteMaster("formulaMachine", id); }
   function deletePackaging(id) { deleteMaster("packaging", id); }
   function deleteMixer(id) { deleteMaster("mixer", id); }
   function customerById(id) { return masterById("customer", id); }
   function supplierById(id) { return masterById("supplier", id); }
   function formulaById(id) { return masterById("formula", id); }
+  function formulaLabById(id) { return masterById("formulaLab", id); }
+  function formulaStabById(id) { return masterById("formulaStab", id); }
+  function formulaMachineById(id) { return masterById("formulaMachine", id); }
+
+  /* Per-document-type n8n import webhooks, edited in Settings & Data.
+     The formula slot falls back to the shipped supabase-config.js value so
+     existing installs keep importing without touching Settings. */
+  function ocrConfig(kind) {
+    var saved = (db.meta.ocrWebhooks || {})[kind] || {};
+    var fallback = kind === "formula" ? (window.ASTORIA_OCR || {}) : {};
+    return {
+      webhookUrl: String(saved.webhookUrl || fallback.webhookUrl || "").trim(),
+      token: String(saved.token || fallback.token || "").trim()
+    };
+  }
+  function saveOcrWebhooks(map) {
+    db.meta.ocrWebhooks = map;
+    audit("UPDATE", "Settings", "formula import webhooks: " +
+      Object.keys(map).filter(function (k) { return (map[k] || {}).webhookUrl; }).join(", ") || "cleared");
+    save();
+  }
   function packagingById(id) { return masterById("packaging", id); }
   function mixerById(id) { return masterById("mixer", id); }
 
@@ -751,8 +788,14 @@ window.Store = (function () {
     }
     if (param === "fill" || param === "weight") {
       var pk = bom.packagingId ? packagingById(bom.packagingId) : null; if (!pk) return null;
-      /* nominal volume +/- the tolerance percentage set on the packaging
-         master; no volume recorded means no band is applied to the check */
+      /* absolute fill band (migration 018) takes precedence; older packaging
+         records fall back to the nominal volume +/- its tolerance percentage.
+         No band recorded means no check is applied. */
+      var fmin = pk.fillMinMl == null ? null : Number(pk.fillMinMl);
+      var fmax = pk.fillMaxMl == null ? null : Number(pk.fillMaxMl);
+      if (fmin != null && fmax != null && !isNaN(fmin) && !isNaN(fmax)) {
+        return { min: Engine.round4(fmin), max: Engine.round4(fmax), unit: "ml" };
+      }
       var vol = Number(pk.volumeMl) || 0; if (!vol) return null;
       var tol = Number(pk.fillTolPct) || 0;
       return {
@@ -1289,7 +1332,7 @@ window.Store = (function () {
   }
 
   function exportMasterCSV() {
-    var rows = [["F/G Product Code", "Product Description", "F/G Status", "FFS Formula",
+    var rows = [["F/G Product Code", "Product Description", "F/G Status", "Formula Code",
       "FPS Packaging", "NA Code", "NA Expiry Date", "Modified By", "Updated At", "Discontinue / Revision Flag"]];
     db.fgs.slice().sort(fgCompare).forEach(function (f) {
       rows.push([f.kodeFG, f.deskripsi, f.status, f.ffs, f.fps, f.kodeNA, f.tglExpire,
@@ -1309,6 +1352,10 @@ window.Store = (function () {
     saveCustomer: saveCustomer, deleteCustomer: deleteCustomer, customerById: customerById,
     saveSupplier: saveSupplier, deleteSupplier: deleteSupplier, supplierById: supplierById,
     saveFormula: saveFormula, deleteFormula: deleteFormula, formulaById: formulaById,
+    saveFormulaLab: saveFormulaLab, deleteFormulaLab: deleteFormulaLab, formulaLabById: formulaLabById,
+    saveFormulaStab: saveFormulaStab, deleteFormulaStab: deleteFormulaStab, formulaStabById: formulaStabById,
+    saveFormulaMachine: saveFormulaMachine, deleteFormulaMachine: deleteFormulaMachine, formulaMachineById: formulaMachineById,
+    ocrConfig: ocrConfig, saveOcrWebhooks: saveOcrWebhooks,
     savePackaging: savePackaging, deletePackaging: deletePackaging, packagingById: packagingById,
     saveMixer: saveMixer, deleteMixer: deleteMixer, mixerById: mixerById,
     saveBOM: saveBOM, deleteBOM: deleteBOM,

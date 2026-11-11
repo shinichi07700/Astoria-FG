@@ -24,7 +24,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn'] loop
+  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'm_formula_lab', 'm_formula_stab', 'm_formula_machine', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn'] loop
     execute format('drop policy if exists staff_all on public.%I', t);
   end loop;
 end $$;
@@ -33,7 +33,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn', 'audit_log', 'profiles'] loop
+  foreach t in array array['fg_master', 'm_customer', 'm_supplier', 'm_formula', 'm_packaging', 'm_mixer', 'm_formula_lab', 'm_formula_stab', 'm_formula_machine', 'materials', 'boms', 'bom_lines', 'sims', 'requests', 'meta_kv', 't_sales_order', 't_purchase_req', 't_calloff', 't_work_order_bulk', 't_purchase_order', 't_inventory_lot', 't_inventory_txn', 't_staging', 't_line_clearance', 't_ipc_record', 't_wo_bulk_phase', 't_btip_transfer', 't_work_order_pack', 't_release', 't_fg_receipt', 't_delivery_order', 't_delivery_line', 't_fg_txn', 'audit_log', 'profiles'] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
 end $$;
@@ -101,6 +101,40 @@ drop policy if exists m_mixer_update on public.m_mixer;
 create policy m_mixer_update on public.m_mixer for update to authenticated using (public.auth_role() = any (array['Admin', 'PPIC', 'Production'])) with check (public.auth_role() = any (array['Admin', 'PPIC', 'Production']));
 drop policy if exists m_mixer_delete on public.m_mixer;
 create policy m_mixer_delete on public.m_mixer for delete to authenticated using (public.auth_role() = any (array['Admin', 'PPIC', 'Production']));
+
+-- ============================================================
+--  FFS submodules (migration 017) - same owner as m_formula
+-- ============================================================
+
+-- m_formula_lab  (write: Admin, RND Formula)
+drop policy if exists m_formula_lab_read on public.m_formula_lab;
+create policy m_formula_lab_read on public.m_formula_lab for select to authenticated using (true);
+drop policy if exists m_formula_lab_insert on public.m_formula_lab;
+create policy m_formula_lab_insert on public.m_formula_lab for insert to authenticated with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_lab_update on public.m_formula_lab;
+create policy m_formula_lab_update on public.m_formula_lab for update to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula'])) with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_lab_delete on public.m_formula_lab;
+create policy m_formula_lab_delete on public.m_formula_lab for delete to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula']));
+
+-- m_formula_stab  (write: Admin, RND Formula)
+drop policy if exists m_formula_stab_read on public.m_formula_stab;
+create policy m_formula_stab_read on public.m_formula_stab for select to authenticated using (true);
+drop policy if exists m_formula_stab_insert on public.m_formula_stab;
+create policy m_formula_stab_insert on public.m_formula_stab for insert to authenticated with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_stab_update on public.m_formula_stab;
+create policy m_formula_stab_update on public.m_formula_stab for update to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula'])) with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_stab_delete on public.m_formula_stab;
+create policy m_formula_stab_delete on public.m_formula_stab for delete to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula']));
+
+-- m_formula_machine  (write: Admin, RND Formula)
+drop policy if exists m_formula_machine_read on public.m_formula_machine;
+create policy m_formula_machine_read on public.m_formula_machine for select to authenticated using (true);
+drop policy if exists m_formula_machine_insert on public.m_formula_machine;
+create policy m_formula_machine_insert on public.m_formula_machine for insert to authenticated with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_machine_update on public.m_formula_machine;
+create policy m_formula_machine_update on public.m_formula_machine for update to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula'])) with check (public.auth_role() = any (array['Admin', 'RND Formula']));
+drop policy if exists m_formula_machine_delete on public.m_formula_machine;
+create policy m_formula_machine_delete on public.m_formula_machine for delete to authenticated using (public.auth_role() = any (array['Admin', 'RND Formula']));
 
 -- ============================================================
 --  Open masters - the UI does not role-gate these, so every staff account may write

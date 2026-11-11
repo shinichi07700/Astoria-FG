@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<!--
+  Master Formula (FFS) — submenu mockup: Composition / Lab Test / Stability / Machine Setup
+  Extends the approved "Spec Sheet Stack" design (mockup-formula-page.html).
+  Scope: import + preview per submenu, each with its own public n8n webhook.
+  Approval chain + HRIS-driven roles are DEFERRED — records save as Draft only.
+  Standalone preview only. Nothing here touches app CSS/JS until approved.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master Formula — Submenus mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --rose:#b12024; --rose-deep:#8c181b; --rose-soft:#f8eded; --rose-line:#e8d0d1;
+  --bg:#f4f1f1; --rail:#fbf9f9; --sheet:#ffffff; --panel:#fcfafa;
+  --line:#ece3e3; --line-strong:#dcc8c9;
+  --ink:#3f3f40; --muted:#6d6d6e; --faint:#97979a;
+  --green:#1a7f4b; --green-soft:#e2f3e9; --green-line:#bfe3cf;
+  --amber:#9a6b00; --amber-soft:#fdf3dd; --amber-line:#ecd9a8;
+  --red:#b42318; --red-soft:#fdeceb; --red-line:#f0c4c0;
+  --grey:#7c7c7f; --grey-soft:#efedee; --grey-line:#d9d6d7;
+  --sans:"Public Sans",-apple-system,"Segoe UI",sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
+  --mono:"Cascadia Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --sh-1:0 1px 2px rgba(63,32,33,.05),0 4px 10px -4px rgba(63,32,33,.12);
+  --sh-2:0 2px 4px rgba(63,32,33,.10),0 10px 14px -6px rgba(63,32,33,.24);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg); color:var(--ink); font:400 14px/1.45 var(--sans); -webkit-font-smoothing:antialiased}
+::selection{background:var(--rose-soft); color:var(--rose-deep)}
+input,select,button{font:inherit; caret-color:var(--rose)}
+:focus-visible{outline:2px solid var(--rose); outline-offset:2px; border-radius:4px}
+.mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+svg{display:block}
+
+.shell{display:flex; min-height:100vh}
+
+/* rail (compact) */
+.rail{width:224px; flex:0 0 224px; background:var(--rail); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh}
+.rail-brand{display:flex; gap:11px; align-items:center; padding:20px 18px 18px; border-bottom:1px solid var(--line)}
+.rail-brand .mark{width:36px; height:36px; flex:0 0 36px; border:1.4px solid var(--rose); border-radius:50%; display:grid; place-items:center; color:var(--rose); background:#fff; font:600 13px var(--serif)}
+.rail-brand b{display:block; font:600 13px/1.2 var(--sans); letter-spacing:.06em; color:var(--rose-deep); text-transform:uppercase}
+.rail-brand span{display:block; margin-top:3px; font:500 10.5px/1.2 var(--sans); letter-spacing:.1em; color:var(--muted); text-transform:uppercase}
+.rail-nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px}
+.rail-nav .grp{font:600 10.5px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--faint); padding:12px 12px 5px}
+.rail-nav a{display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:9px; color:var(--muted); text-decoration:none; font-weight:500; font-size:13px}
+.rail-nav a:hover{background:#f3ecec; color:var(--ink)}
+.rail-nav a[aria-current="page"]{background:var(--rose-soft); color:var(--rose-deep); font-weight:600}
+.rail-user{margin-top:auto; border-top:1px solid var(--line); padding:14px 16px; display:flex; align-items:center; gap:10px}
+.rail-user .av{width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:var(--rose); color:#fff; display:grid; place-items:center; font:600 11.5px var(--sans)}
+.rail-user b{display:block; font-size:12.5px; font-weight:600}
+.rail-user span{display:block; font-size:11px; color:var(--muted)}
+
+/* main */
+.main{flex:1; min-width:0; padding:28px 32px 48px}
+.page-head{display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap; margin:0 0 16px}
+.head-left{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+h1{margin:0; font:400 32px/1.15 var(--serif); letter-spacing:-.01em; color:#2e2e2f}
+.form-ref{font:600 12px/1 var(--mono); letter-spacing:.08em; color:#fff; background:var(--rose); padding:7px 11px; border-radius:7px; box-shadow:var(--sh-1)}
+.head-actions{display:flex; gap:10px; flex-wrap:wrap}
+.btn{display:inline-flex; align-items:center; gap:8px; border-radius:10px; cursor:pointer; font-weight:600; font-size:13.5px; padding:9px 15px; border:1px solid transparent; transition:transform .16s var(--ease), background .16s var(--ease), border-color .16s var(--ease)}
+.btn svg{stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round}
+.btn:active{transform:translateY(1px)}
+.btn-ghost{background:#fff; color:var(--rose-deep); border-color:var(--rose-line); box-shadow:var(--sh-1)}
+.btn-ghost:hover{background:var(--rose-soft); border-color:var(--rose)}
+.btn-primary{background:var(--rose); color:#fff; box-shadow:0 2px 5px rgba(140,24,27,.28)}
+.btn-primary:hover{background:var(--rose-deep)}
+.btn-sm{padding:7px 12px; font-size:12.5px; border-radius:8px}
+
+/* tabs */
+.tabs{display:flex; gap:4px; border-bottom:1.5px solid var(--line-strong); margin:0 0 18px; flex-wrap:wrap}
+.tab{appearance:none; border:none; background:transparent; cursor:pointer; padding:11px 18px 12px; font:600 13.5px var(--sans); color:var(--muted); border-bottom:2.5px solid transparent; margin-bottom:-1.5px; display:flex; align-items:center; gap:8px; transition:color .16s var(--ease)}
+.tab:hover{color:var(--rose-deep)}
+.tab[aria-selected="true"]{color:var(--rose-deep); border-bottom-color:var(--rose)}
+.tab .n{font:600 10.5px var(--mono); background:var(--grey-soft); color:var(--muted); border-radius:999px; padding:2px 7px}
+.tab[aria-selected="true"] .n{background:var(--rose-soft); color:var(--rose-deep)}
+.tab .soon{font:600 9px var(--sans); letter-spacing:.08em; text-transform:uppercase; color:var(--amber); background:var(--amber-soft); border:1px solid var(--amber-line); border-radius:5px; padding:2px 5px}
+
+/* toolbar */
+.toolbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 14px}
+.search{position:relative; flex:0 1 300px; min-width:210px}
+.search svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); stroke:var(--faint); fill:none; stroke-width:1.7; stroke-linecap:round}
+.search input{width:100%; padding:8px 12px 8px 33px; border:1px solid var(--line-strong); border-radius:10px; background:#fff; font-size:13px}
+.search input:focus{outline:none; border-color:var(--rose); box-shadow:0 0 0 3px var(--rose-soft)}
+.count-pill{margin-left:auto; font:500 12px var(--mono); color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 12px}
+.count-pill b{color:var(--rose-deep); font-weight:600}
+.webhook-dot{display:inline-flex; align-items:center; gap:6px; font:500 11.5px var(--mono); color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 12px}
+.webhook-dot i{width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block}
+.webhook-dot.off i{background:var(--grey-line)}
+
+/* sheet tables */
+.sheet{background:var(--sheet); border:1px solid var(--line); border-radius:12px; box-shadow:var(--sh-1); overflow:hidden}
+.sheet-scroll{overflow-x:auto}
+table.ffs{width:100%; border-collapse:collapse; min-width:980px}
+table.ffs th, table.ffs td{border:1px solid var(--line); padding:0}
+table.ffs thead th{background:#fdfbfb; font-weight:600; text-align:center; vertical-align:middle}
+th.grp{color:var(--rose); font-size:12.5px; letter-spacing:.06em; padding:8px 8px; border-bottom:none !important}
+th.col{color:var(--ink); font-size:11.5px; font-weight:600; padding:7px 10px 9px; letter-spacing:.02em}
+th.col small{display:block; font-weight:500; color:var(--muted); font-size:10px; letter-spacing:.04em; margin-top:2px}
+td{vertical-align:middle}
+tr.row{cursor:pointer; transition:background .16s var(--ease)}
+tr.row:hover{background:#fcf7f7}
+td.code{background:var(--rose-soft); text-align:center; padding:12px 10px; width:128px}
+td.code .mono{color:var(--rose-deep); font-size:13px; font-weight:600; white-space:nowrap}
+td.prod{padding:11px 14px; min-width:210px}
+td.prod b{display:block; font-weight:600; font-size:13px; color:#2e2e2f}
+td.prod span{display:block; margin-top:2px; font:400 11px var(--mono); color:var(--muted)}
+td.num{text-align:center; padding:11px 8px; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:12.5px; white-space:nowrap}
+td.txt{padding:11px 12px; font-size:12.5px}
+td.upd{padding:10px 12px; width:112px; font-family:var(--mono); font-size:11px; color:var(--muted); line-height:1.5; white-space:nowrap}
+.lamp{display:inline-block; width:24px; height:24px; margin:0 2px; border-radius:6px; vertical-align:middle; border:1.4px solid}
+.lamp.pass{background:var(--green-soft); border-color:var(--green-line)}
+.lamp.run{background:var(--amber-soft); border-color:var(--amber-line)}
+.lamp.fail{background:var(--red-soft); border-color:var(--red-line)}
+.lamp.none{background:var(--grey-soft); border-color:var(--grey-line)}
+.chip{display:inline-block; font:600 10.5px var(--sans); letter-spacing:.05em; text-transform:uppercase; border-radius:6px; padding:3px 8px; border:1px solid}
+.chip.draft{color:var(--grey); background:var(--grey-soft); border-color:var(--grey-line)}
+.chip.ok{color:var(--green); background:var(--green-soft); border-color:var(--green-line)}
+.chip.warn{color:var(--amber); background:var(--amber-soft); border-color:var(--amber-line)}
+.empty-row td{padding:26px 14px; text-align:center; color:var(--faint); font-size:13px}
+.hint{margin-top:10px; font-size:12px; color:var(--muted)}
+
+/* modal */
+.backdrop{position:fixed; inset:0; background:rgba(46,26,27,.42); backdrop-filter:blur(2px); display:none; place-items:center; z-index:50; padding:24px}
+.backdrop.show{display:grid}
+.modal{background:#fff; border-radius:14px; box-shadow:var(--sh-2); width:min(860px,100%); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; animation:pop .22s var(--ease)}
+@keyframes pop{from{transform:translateY(10px) scale(.985); opacity:0}}
+.modal-head{padding:16px 22px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px}
+.modal-head h2{margin:0; font:400 21px var(--serif); color:#2e2e2f}
+.modal-x{border:none; background:transparent; cursor:pointer; color:var(--muted); font-size:20px; line-height:1; padding:4px 8px; border-radius:8px}
+.modal-x:hover{background:var(--rose-soft); color:var(--rose-deep)}
+.modal-body{padding:18px 22px; overflow-y:auto}
+.modal-foot{padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px; background:var(--panel)}
+
+/* import banner + preview */
+.import-banner{background:var(--amber-soft); border:1px solid var(--amber-line); border-radius:10px; padding:11px 14px; font-size:12.5px; color:#6b4a08; margin-bottom:14px}
+.import-banner ul{margin:6px 0 0; padding-left:18px}
+.import-banner li{margin:2px 0}
+.matchline{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px}
+.match{display:inline-flex; align-items:center; gap:7px; font:500 12px var(--mono); border-radius:8px; padding:7px 11px; border:1px solid}
+.match.hit{color:var(--green); background:var(--green-soft); border-color:var(--green-line)}
+.match.miss{color:var(--red); background:var(--red-soft); border-color:var(--red-line)}
+table.preview{width:100%; border-collapse:collapse; font-size:12.5px}
+table.preview th, table.preview td{border:1px solid var(--line); padding:7px 11px; text-align:left}
+table.preview thead th{background:#fdfbfb; font-weight:600; font-size:11.5px; letter-spacing:.03em}
+table.preview td.k{width:220px; color:var(--muted); font-weight:500; background:var(--panel)}
+table.preview td.v{font-family:var(--mono); font-size:12.5px}
+table.preview td.v.blank{color:var(--faint); font-style:italic; font-family:var(--sans)}
+.sec-label{font:600 11px var(--sans); letter-spacing:.1em; text-transform:uppercase; color:var(--rose); margin:16px 0 7px}
+
+/* spinner */
+.parse-box{padding:26px 0; text-align:center}
+.spinner{width:34px; height:34px; margin:0 auto 14px; border-radius:50%; border:3px solid var(--rose-soft); border-top-color:var(--rose); animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.parse-box p{margin:0; font-size:12.5px; color:var(--muted)}
+
+/* webhook settings */
+.wh-grid{display:flex; flex-direction:column; gap:12px}
+.wh-row{border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--panel)}
+.wh-row h3{margin:0 0 8px; font:600 13px var(--sans); color:var(--rose-deep); display:flex; align-items:center; gap:8px}
+.wh-row .fields{display:grid; grid-template-columns:1fr 220px; gap:10px}
+.wh-row label{display:block; font:500 10.5px var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:4px}
+.wh-row input{width:100%; padding:8px 11px; border:1px solid var(--line-strong); border-radius:8px; background:#fff; font:400 12px var(--mono)}
+.wh-row input:focus{outline:none; border-color:var(--rose); box-shadow:0 0 0 3px var(--rose-soft)}
+
+/* toast */
+.toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:#2e2e2f; color:#fff; font:500 13px var(--sans); padding:11px 20px; border-radius:10px; box-shadow:var(--sh-2); opacity:0; pointer-events:none; transition:all .25s var(--ease); z-index:99}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+/* mock notes */
+.mock-notes{margin-top:34px; border:1.5px dashed var(--rose-line); border-radius:12px; padding:16px 20px; background:#fff}
+.mock-notes h2{margin:0 0 8px; font:600 13px var(--sans); letter-spacing:.08em; text-transform:uppercase; color:var(--rose-deep)}
+.mock-notes ul{margin:0; padding-left:18px; font-size:12.5px; color:var(--muted)}
+.mock-notes li{margin:4px 0}
+@media (max-width:900px){.rail{display:none}.main{padding:20px 16px 40px}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ rail ============ -->
+  <aside class="rail">
+    <div class="rail-brand">
+      <div class="mark">A</div>
+      <div><b>Astoria Prima</b><span>Finished Goods MES</span></div>
+    </div>
+    <nav class="rail-nav">
+      <div class="grp">Overview</div>
+      <a href="#">Dashboard</a>
+      <div class="grp">Master Data</div>
+      <a href="#">Master F/G</a>
+      <a href="#">Master Material</a>
+      <a href="#">Master Customer</a>
+      <a href="#">Master Supplier</a>
+      <a href="#" aria-current="page">Master Formula</a>
+      <a href="#">Master Packaging</a>
+      <div class="grp">Control</div>
+      <a href="#" id="nav-settings">Settings &amp; Data</a>
+    </nav>
+    <div class="rail-user">
+      <div class="av">RF</div>
+      <div><b>RND Formulator</b><span>RND Formula</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ main ============ -->
+  <main class="main">
+    <div class="page-head">
+      <div class="head-left">
+        <h1>Master Formula</h1>
+        <span class="form-ref">FFS</span>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" id="btn-webhooks">
+          <svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Import webhooks
+        </button>
+      </div>
+    </div>
+
+    <!-- tabs -->
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="comp">Composition <span class="n">128</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="lab">Lab Test Parameters <span class="n">3</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="stab">Stability Test <span class="n">2</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="machine">Machine Setup <span class="n">1</span></button>
+    </div>
+
+    <!-- ===== TAB 1 : Composition (existing page, unchanged) ===== -->
+    <section id="panel-comp" role="tabpanel">
+      <div class="toolbar">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input placeholder="Search code, product, customer…">
+        </div>
+        <span class="webhook-dot"><i></i>n8n: formula configured</span>
+        <span class="count-pill"><b>128</b> formulas</span>
+        <button class="btn btn-ghost btn-sm" data-import="comp">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3v12m0-12 4 4m-4-4L8 7"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Import PDF
+        </button>
+        <button class="btn btn-primary btn-sm">+ New Formula</button>
+      </div>
+      <div class="sheet"><div class="sheet-scroll">
+        <table class="ffs">
+          <thead>
+            <tr>
+              <th class="grp" rowspan="2">FFS Code</th>
+              <th class="grp" rowspan="2">Kategori</th>
+              <th class="grp" rowspan="2">Product / Customer</th>
+              <th class="grp span2" colspan="2">Parameters</th>
+              <th class="grp" rowspan="2">Stability<br><small style="font-weight:500;color:var(--muted)">TK · TKUL · T50 · TM</small></th>
+              <th class="grp" rowspan="2">Updated</th>
+            </tr>
+            <tr><th class="col">pH</th><th class="col">BJ</th></tr>
+          </thead>
+          <tbody>
+            <tr class="row"><td class="code"><span class="mono">MR03-BN-01</span></td><td class="txt" style="text-align:center">Cream</td><td class="prod"><b>Foundation Cream</b><span>BN · Natural Beige</span></td><td class="num">5.5 – 6.5</td><td class="num">0.9850</td><td class="num"><span class="lamp pass"></span><span class="lamp pass"></span><span class="lamp run"></span><span class="lamp none"></span></td><td class="upd">2026-11-08<br>by RND-F1</td></tr>
+            <tr class="row"><td class="code"><span class="mono">SR01-CL-02</span></td><td class="txt" style="text-align:center">Serum</td><td class="prod"><b>Brightening Serum</b><span>CL · Glow Variant</span></td><td class="num">4.0 – 5.0</td><td class="num">1.0120</td><td class="num"><span class="lamp pass"></span><span class="lamp pass"></span><span class="lamp pass"></span><span class="lamp pass"></span></td><td class="upd">2026-11-05<br>by RND-F2</td></tr>
+            <tr class="row"><td class="code"><span class="mono">LT02-PT-01</span></td><td class="txt" style="text-align:center">Lotion</td><td class="prod"><b>Body Lotion Shea</b><span>PT · Classic</span></td><td class="num">5.0 – 6.0</td><td class="num">0.9780</td><td class="num"><span class="lamp run"></span><span class="lamp run"></span><span class="lamp none"></span><span class="lamp none"></span></td><td class="upd">2026-11-02<br>by RND-F1</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <p class="hint">Existing Composition page — unchanged. Its PDF import keeps using the current formula webhook.</p>
+    </section>
+
+    <!-- ===== TAB 2 : Lab Test Parameters ===== -->
+    <section id="panel-lab" role="tabpanel" hidden>
+      <div class="toolbar">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input placeholder="Search FFS code or product…">
+        </div>
+        <span class="webhook-dot"><i></i>n8n: lab-test configured</span>
+        <span class="count-pill"><b>3</b> records</span>
+        <button class="btn btn-ghost btn-sm" data-import="lab">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3v12m0-12 4 4m-4-4L8 7"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Import PDF
+        </button>
+        <button class="btn btn-primary btn-sm">+ New Entry</button>
+      </div>
+      <div class="sheet"><div class="sheet-scroll">
+        <table class="ffs">
+          <thead><tr>
+            <th class="col">FFS Code</th><th class="col">Product</th>
+            <th class="col">pH <small>spec / result</small></th>
+            <th class="col">Viscosity <small>cP</small></th>
+            <th class="col">BJ</th>
+            <th class="col">Appearance</th>
+            <th class="col">Micro <small>TPC / Y&amp;M</small></th>
+            <th class="col">Status</th><th class="col">Updated</th>
+          </tr></thead>
+          <tbody>
+            <tr class="row"><td class="code"><span class="mono">MR03-BN-01</span></td><td class="prod"><b>Foundation Cream</b><span>Natural Beige</span></td><td class="num">5.5–6.5 / 6.1</td><td class="num">24 800</td><td class="num">0.9850</td><td class="txt">Homogeneous, beige</td><td class="num">&lt;100 / neg</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-08<br>import</td></tr>
+            <tr class="row"><td class="code"><span class="mono">SR01-CL-02</span></td><td class="prod"><b>Brightening Serum</b><span>Glow Variant</span></td><td class="num">4.0–5.0 / 4.4</td><td class="num">3 200</td><td class="num">1.0120</td><td class="txt">Clear gel</td><td class="num">&lt;100 / neg</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-06<br>manual</td></tr>
+            <tr class="row"><td class="code"><span class="mono">LT02-PT-01</span></td><td class="prod"><b>Body Lotion Shea</b><span>Classic</span></td><td class="num">5.0–6.0 / 5.6</td><td class="num">12 400</td><td class="num">0.9780</td><td class="txt">White, smooth</td><td class="num blank">—</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-03<br>import</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <p class="hint">Lab results per FFS code. Imported records save as Draft; the approval chain (supervisor / R&amp;D Manager) is a later phase.</p>
+    </section>
+
+    <!-- ===== TAB 3 : Stability Test ===== -->
+    <section id="panel-stab" role="tabpanel" hidden>
+      <div class="toolbar">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input placeholder="Search FFS code or product…">
+        </div>
+        <span class="webhook-dot"><i></i>n8n: stability configured</span>
+        <span class="count-pill"><b>2</b> records</span>
+        <button class="btn btn-ghost btn-sm" data-import="stab">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3v12m0-12 4 4m-4-4L8 7"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Import PDF
+        </button>
+        <button class="btn btn-primary btn-sm">+ New Entry</button>
+      </div>
+      <div class="sheet"><div class="sheet-scroll">
+        <table class="ffs">
+          <thead><tr>
+            <th class="col">FFS Code</th><th class="col">Product</th>
+            <th class="col">TK <small>room</small></th><th class="col">TKUL <small>fridge</small></th>
+            <th class="col">T50 <small>oven 50°C</small></th><th class="col">TM <small>sunlight</small></th>
+            <th class="col">Start</th><th class="col">Cycle <small>observed</small></th>
+            <th class="col">Status</th><th class="col">Updated</th>
+          </tr></thead>
+          <tbody>
+            <tr class="row"><td class="code"><span class="mono">MR03-BN-01</span></td><td class="prod"><b>Foundation Cream</b><span>Natural Beige</span></td><td class="num"><span class="lamp pass"></span></td><td class="num"><span class="lamp pass"></span></td><td class="num"><span class="lamp run"></span></td><td class="num"><span class="lamp none"></span></td><td class="num">2026-10-01</td><td class="num">W4 / W12</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-07<br>import</td></tr>
+            <tr class="row"><td class="code"><span class="mono">SR01-CL-02</span></td><td class="prod"><b>Brightening Serum</b><span>Glow Variant</span></td><td class="num"><span class="lamp pass"></span></td><td class="num"><span class="lamp pass"></span></td><td class="num"><span class="lamp pass"></span></td><td class="num"><span class="lamp pass"></span></td><td class="num">2026-08-15</td><td class="num">W12 / W12</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-04<br>import</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <p class="hint">Full stability records (observations per cycle) replace the four summary flags on Composition; the flags stay as a read-only roll-up there.</p>
+    </section>
+
+    <!-- ===== TAB 4 : Machine Setup ===== -->
+    <section id="panel-machine" role="tabpanel" hidden>
+      <div class="toolbar">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input placeholder="Search FFS code or product…">
+        </div>
+        <span class="webhook-dot off"><i></i>n8n: machine-setup not set</span>
+        <span class="count-pill"><b>1</b> record</span>
+        <button class="btn btn-ghost btn-sm" data-import="machine">
+          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3v12m0-12 4 4m-4-4L8 7"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Import PDF
+        </button>
+        <button class="btn btn-primary btn-sm">+ New Entry</button>
+      </div>
+      <div class="sheet"><div class="sheet-scroll">
+        <table class="ffs">
+          <thead><tr>
+            <th class="col">FFS Code</th><th class="col">Product</th>
+            <th class="col">Mixer / Vessel</th>
+            <th class="col">Speed <small>rpm</small></th>
+            <th class="col">Temp <small>°C</small></th>
+            <th class="col">Mix time <small>min</small></th>
+            <th class="col">Phases</th>
+            <th class="col">Status</th><th class="col">Updated</th>
+          </tr></thead>
+          <tbody>
+            <tr class="row"><td class="code"><span class="mono">MR03-BN-01</span></td><td class="prod"><b>Foundation Cream</b><span>Natural Beige</span></td><td class="txt">Vacuum emulsifier / V-200</td><td class="num">45 / 3 000 homo</td><td class="num">75 → 40</td><td class="num">25 + 15</td><td class="num">A → B → C</td><td class="num"><span class="chip draft">Draft</span></td><td class="upd">2026-11-08<br>manual</td></tr>
+            <tr class="empty-row"><td colspan="9">No more machine-setup records yet — import a setup sheet or add one manually.</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <p class="hint">These parameters will feed BMR phase instructions once the approval chain is in place. Import button stays disabled until its webhook is configured.</p>
+    </section>
+
+    <!-- mock notes -->
+    <div class="mock-notes">
+      <h2>Mockup notes — for review</h2>
+      <ul>
+        <li><b>In scope:</b> 4 submenus under Master Formula; each new submenu gets Import PDF → preview → confirm-save (Draft), reusing the formula importer's tolerant mapping (never invent values, flag unmatched FFS/material codes).</li>
+        <li><b>Webhooks:</b> one public n8n webhook + token per submenu, stored in Settings &amp; Data (button top-right). Composition keeps the existing formula webhook.</li>
+        <li><b>Deferred:</b> approval chain (Draft → Approved, supervisor/Manager sign-off), HRIS-driven positions/roles, department locking on material entry, F/G-code and BMR gating.</li>
+        <li><b>Try it:</b> switch tabs, press <i>Import PDF</i> on any tab to see the parse → preview flow, press <i>Import webhooks</i> for the settings panel.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<!-- ============ parse spinner modal ============ -->
+<div class="backdrop" id="bd-parse">
+  <div class="modal" style="width:min(420px,100%)">
+    <div class="modal-head"><h2 id="parse-title">Import from PDF</h2></div>
+    <div class="modal-body">
+      <div class="parse-box">
+        <div class="spinner"></div>
+        <p id="parse-msg">Parsing LAB-MR03-BN-01.pdf with n8n… usually 10–30 s</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ preview modal ============ -->
+<div class="backdrop" id="bd-preview">
+  <div class="modal">
+    <div class="modal-head"><h2 id="pv-title">Preview — Lab Test Parameters</h2><button class="modal-x" data-close>&times;</button></div>
+    <div class="modal-body" id="pv-body"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" id="pv-confirm">Confirm &amp; Save as Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ webhook settings modal ============ -->
+<div class="backdrop" id="bd-webhooks">
+  <div class="modal">
+    <div class="modal-head"><h2>Formula import webhooks</h2><button class="modal-x" data-close>&times;</button></div>
+    <div class="modal-body">
+      <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">One public n8n webhook per document type. Each workflow owns its own OCR prompt. Stored in Settings &amp; Data; tokens never leave the browser except in the <span class="mono">X-Astoria-Token</span> header.</p>
+      <div class="wh-grid">
+        <div class="wh-row"><h3><span class="chip ok">configured</span> Composition (formula)</h3>
+          <div class="fields"><div><label>Webhook URL</label><input value="https://n8n.astoria.example/webhook/formula-ocr"></div><div><label>Token</label><input type="password" value="••••••••••••"></div></div>
+        </div>
+        <div class="wh-row"><h3><span class="chip ok">configured</span> Lab Test Parameters</h3>
+          <div class="fields"><div><label>Webhook URL</label><input value="https://n8n.astoria.example/webhook/labtest-ocr"></div><div><label>Token</label><input type="password" value="••••••••••••"></div></div>
+        </div>
+        <div class="wh-row"><h3><span class="chip ok">configured</span> Stability Test</h3>
+          <div class="fields"><div><label>Webhook URL</label><input value="https://n8n.astoria.example/webhook/stability-ocr"></div><div><label>Token</label><input type="password" value="••••••••••••"></div></div>
+        </div>
+        <div class="wh-row"><h3><span class="chip draft">not set</span> Machine Setup Parameters</h3>
+          <div class="fields"><div><label>Webhook URL</label><input placeholder="https://…/webhook/machine-setup-ocr"></div><div><label>Token</label><input placeholder="shared secret"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close>Close</button>
+      <button class="btn btn-primary" data-close>Save webhooks</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var TABS = ["comp", "lab", "stab", "machine"];
+  var tabBtns = document.querySelectorAll(".tab");
+  tabBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      tabBtns.forEach(function (x) { x.setAttribute("aria-selected", x === b ? "true" : "false"); });
+      TABS.forEach(function (t) { document.getElementById("panel-" + t).hidden = (t !== b.dataset.tab); });
+    });
+  });
+
+  function show(id) { document.getElementById(id).classList.add("show"); }
+  function hide(id) { document.getElementById(id).classList.remove("show"); }
+  document.querySelectorAll("[data-close]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      ["bd-parse", "bd-preview", "bd-webhooks"].forEach(hide);
+    });
+  });
+  document.getElementById("btn-webhooks").addEventListener("click", function () { show("bd-webhooks"); });
+  document.getElementById("nav-settings").addEventListener("click", function (e) { e.preventDefault(); show("bd-webhooks"); });
+
+  function toast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2600);
+  }
+
+  /* ---- mock import flows: one preview layout per document type ---- */
+  var FLOWS = {
+    comp: {
+      title: "Preview — Formula (Composition)", file: "FFS-MR03-BN-01.pdf",
+      matches: [["hit", "FFS MR03-BN-01 — exists, will overwrite"], ["hit", "Customer BN matched by name"], ["hit", "14 / 14 materials matched"]],
+      warnings: ["Composition ratios sum to 99.8% — should be 100%"],
+      sections: [["Identity", [["Formula Code", "MR03-BN-01"], ["Kategori", "Cream"], ["Product / Variant", "Foundation Cream / Natural Beige"], ["BJ", "0.9850"]]],
+                 ["Composition (first 4 lines)", [["TP-139-M · Titanium Dioxide", "8.000 %"], ["LT-218-Q · Emulsifying Wax", "4.500 %"], ["FK-394-P · Dimethicone", "3.000 %"], ["WP-520-Y · Aqua", "ad 100 %"]]]]
+    },
+    lab: {
+      title: "Preview — Lab Test Parameters", file: "LAB-MR03-BN-01.pdf",
+      matches: [["hit", "FFS MR03-BN-01 matched"], ["miss", "Analyst ID not in master — kept as text"]],
+      warnings: ["Micro result 'Y&M' blank in document — left empty, never guessed"],
+      sections: [["Test results", [["pH (spec 5.5–6.5)", "6.1"], ["Viscosity", "24 800 cP"], ["BJ", "0.9850"], ["Appearance", "Homogeneous, beige"], ["Odor", "Characteristic"], ["TPC", "< 100 cfu/g"], ["Yeast & Mold", ""]]],
+                 ["Document", [["Test date", "2026-11-06"], ["Batch / Lab ref", "LB-2611-031"], ["Analyst", "S. Wijaya (unmatched)"]]]]
+    },
+    stab: {
+      title: "Preview — Stability Test", file: "STAB-MR03-BN-01-W4.pdf",
+      matches: [["hit", "FFS MR03-BN-01 matched"]],
+      warnings: ["TM (sunlight) cycle not started — status '-'"],
+      sections: [["Cycle W4 observations", [["TK (room)", "Pass — no separation"], ["TKUL (fridge)", "Pass — slight thickening, normal"], ["T50 (oven 50°C)", "Running — read at W4, final W12"], ["TM (sunlight)", "-"]]],
+                 ["Study", [["Start date", "2026-10-01"], ["Protocol", "12 weeks, 4 conditions"], ["pH drift", "6.1 → 6.0 (within spec)"]]]]
+    },
+    machine: {
+      title: "Preview — Machine Setup Parameters", file: "SETUP-MR03-BN-01.pdf",
+      matches: [["hit", "FFS MR03-BN-01 matched"], ["hit", "Mixer V-200 matched in catalogue"]],
+      warnings: [],
+      sections: [["Setup", [["Mixer / Vessel", "Vacuum emulsifier / V-200"], ["Phase A (oil)", "75 °C · 45 rpm · 25 min"], ["Phase B (water)", "75 °C · add to A · homo 3 000 rpm 15 min"], ["Cooling", "40 °C · 30 rpm · add phase C"], ["Vacuum", "-0.6 bar during homogenizing"]]]]
+    }
+  };
+
+  document.querySelectorAll("[data-import]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var kind = btn.dataset.import, flow = FLOWS[kind];
+      if (kind === "machine") { toast("Machine-setup webhook not configured — set it in Import webhooks first"); return; }
+      document.getElementById("parse-title").textContent = "Import " + kindLabel(kind) + " from PDF";
+      document.getElementById("parse-msg").textContent = "Parsing " + flow.file + " with n8n… usually 10–30 s";
+      show("bd-parse");
+      setTimeout(function () { hide("bd-parse"); openPreview(kind); }, 1400);
+    });
+  });
+  function kindLabel(k) { return { comp: "formula", lab: "lab test", stab: "stability", machine: "machine setup" }[k]; }
+
+  function openPreview(kind) {
+    var flow = FLOWS[kind];
+    document.getElementById("pv-title").textContent = flow.title;
+    var body = document.getElementById("pv-body");
+    body.innerHTML = "";
+    var banner = document.createElement("div");
+    banner.className = "import-banner";
+    banner.innerHTML = "<b>Imported from " + flow.file + "</b> — check every value before saving. Nothing is written until you confirm." +
+      (flow.warnings.length ? "<ul>" + flow.warnings.map(function (w) { return "<li>" + w + "</li>"; }).join("") + "</ul>" : "");
+    body.appendChild(banner);
+    var ml = document.createElement("div"); ml.className = "matchline";
+    flow.matches.forEach(function (m) {
+      var s = document.createElement("span"); s.className = "match " + m[0];
+      s.textContent = (m[0] === "hit" ? "✓ " : "✕ ") + m[1];
+      ml.appendChild(s);
+    });
+    body.appendChild(ml);
+    flow.sections.forEach(function (sec) {
+      var h = document.createElement("div"); h.className = "sec-label"; h.textContent = sec[0];
+      body.appendChild(h);
+      var tbl = document.createElement("table"); tbl.className = "preview";
+      tbl.innerHTML = "<thead><tr><th>Field</th><th>Parsed value</th></tr></thead>";
+      var tb = document.createElement("tbody");
+      sec[1].forEach(function (row) {
+        var tr = document.createElement("tr");
+        var k = document.createElement("td"); k.className = "k"; k.textContent = row[0];
+        var v = document.createElement("td"); v.className = "v" + (row[1] ? "" : " blank"); v.textContent = row[1] || "(blank — not in document)";
+        tr.appendChild(k); tr.appendChild(v); tb.appendChild(tr);
+      });
+      tbl.appendChild(tb); body.appendChild(tbl);
+    });
+    document.getElementById("pv-confirm").onclick = function () {
+      hide("bd-preview");
+      toast(kindLabel(kind) + " record for MR03-BN-01 saved as Draft");
+    };
+    show("bd-preview");
+  }
+})();
+</script>
+</body>
+</html>

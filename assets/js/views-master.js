@@ -219,7 +219,7 @@ window.ViewsMaster = (function () {
     if (canEditFG()) headActions.push(UI.btn("+ New F/G SKU", function () { fgEditor(null); }, "btn-primary"));
     root.appendChild(UI.pageHead("Master List Finish Good", "", headActions));
 
-    var search = UI.input({ placeholder: "Search code, description, FFS, FPS, NA...", value: fgFilter.q });
+    var search = UI.input({ placeholder: "Search code, description, Formula, FPS, NA...", value: fgFilter.q });
     var body = UI.el("div", { class: "card-body tight" });
     search.addEventListener("input", function () { fgFilter.q = search.value; renderFGTable(body); });
     var chips = UI.el("div", { class: "filter-chips" });
@@ -273,7 +273,7 @@ window.ViewsMaster = (function () {
         ]);
       } },
       { label: "F/G Status", render: function (r) { return UI.pill(r.status); } },
-      { label: "FFS Formula", cls: "mono", key: "ffs" },
+      { label: "Formula Code", cls: "mono", key: "ffs" },
       { label: "FPS Packaging", cls: "mono", key: "fps" },
       { label: "NA Code", cls: "mono", render: function (r) { return r.kodeNA || "<span class='row-muted'>-</span>"; } },
       { label: "NA Expiry Date", cls: "mono", render: function (r) { return r.tglExpire || "<span class='row-muted'>-</span>"; } },
@@ -354,7 +354,7 @@ window.ViewsMaster = (function () {
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "F/G Product Code (auto)" }), pvKode]),
         UI.el("div", {}, [UI.el("div", { class: "pv-label", text: "F/G Status (auto)" }), pvStatus])
       ]),
-      fieldset("RND Formula", [UI.field("FFS Formula code", iFfs, "Initial formula code input by RND formula team; corrected after BPOM approval." + lk(rights.ffs))]),
+      fieldset("RND Formula", [UI.field("Formula Code", iFfs, "Initial formula code input by RND formula team; corrected after BPOM approval." + lk(rights.ffs))]),
       fieldset("RND Packaging", [UI.field("FPS Packaging code", iFps, "Packaging code entered by RND Packaging team." + lk(rights.fps))]),
       fieldset("Regulatory", [
         UI.field("Product Description", iDesc, rights.desc ? null : "Locked for your role."),
@@ -373,7 +373,7 @@ window.ViewsMaster = (function () {
       wide: true,
       actions: [{
         label: "Save SKU", cls: "btn-primary", onClick: function () {
-          if (!d.ffs && !d.fps) { UI.toast("FFS Formula or FPS Packaging is required", "err"); return; }
+          if (!d.ffs && !d.fps) { UI.toast("Formula Code or FPS Packaging is required", "err"); return; }
           var id = d.ffs + "|" + d.fps;
           if (isNew && Store.fgById(id)) { UI.toast("SKU already exists: " + Engine.kodeFG(d.ffs, d.fps), "err"); return; }
           if (!isNew && id !== rec.id && Store.fgById(id)) { UI.toast("Another SKU already uses " + Engine.kodeFG(d.ffs, d.fps), "err"); return; }
@@ -412,7 +412,7 @@ window.ViewsMaster = (function () {
         ])
       ]),
       UI.el("div", { class: "form-grid" }, [
-        UI.field("New FFS Formula code", iFfs, rights.ffs ? "Change this when the formula (bulk) is revised." : "Locked for your role."),
+        UI.field("New Formula Code", iFfs, rights.ffs ? "Change this when the formula (bulk) is revised." : "Locked for your role."),
         UI.field("New FPS Packaging code", iFps, rights.fps ? "Change this when the packaging is revised." : "Locked for your role.")
       ])
     ]);
@@ -422,7 +422,7 @@ window.ViewsMaster = (function () {
       actions: [{
         label: "Create revision", cls: "btn-primary", onClick: function () {
           var ffs = iFfs.value.trim(), fps = iFps.value.trim();
-          if (!ffs && !fps) { UI.toast("FFS Formula or FPS Kemas is required", "err"); return; }
+          if (!ffs && !fps) { UI.toast("Formula Code or FPS Kemas is required", "err"); return; }
           if (ffs === rec.ffs && fps === rec.fps) { UI.toast("Change at least one code to create a revision", "err"); return; }
           var id = ffs + "|" + fps;
           if (Store.fgById(id)) { UI.toast("SKU already exists: " + Engine.kodeFG(ffs, fps), "err"); return; }
@@ -881,6 +881,7 @@ window.ViewsMaster = (function () {
      urutan, BJ, pH range, viscosity and the four stability tests. The recipe
      percentages themselves live on the production BOM's FORMULA lines. */
   var formulaFilter = { q: "", kat: "", stab: "", page: 1, rpp: 10, open: null };
+  var ffsTab = "comp";
   var FFS_CATS = ["Lip Makeup", "Face Makeup", "Eye Makeup", "Skincare", "Cleansers & Makeup Removers", "Sun Care", "Body Care", "Hair Care"];
   var FFS_STAB = { "Pass": { cls: "pass", word: "PASS" }, "Running": { cls: "run", word: "RUNNING" }, "Fail": { cls: "fail", word: "FAIL" }, "-": { cls: "none", word: "NOT SET" } };
   var FFS_TESTS = [["stabTk", "TK", "Thermal cycle"], ["stabTkul", "TKUL", "UV cycle"], ["stabT50", "T50", "50\u00b0C oven"], ["stabTm", "TM", "Real-time"]];
@@ -897,17 +898,44 @@ window.ViewsMaster = (function () {
   function formulas(root) {
     var db = Store.get();
     var canEdit = RBAC.canEditMaster("formulas");
-    var headBtns = [];
-    if (canEdit && window.OCRImport && OCRImport.configured()) {
-      headBtns.push(UI.btn("Import from PDF", importFormulaPdf, ""));
-    }
-    if (canEdit) headBtns.push(UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary"));
     root.appendChild(UI.pageHead("Master Formula (FFS)",
-      "Bulk formula parameters (form FR-RD-09): specific gravity, pH range, viscosity and the TK / TKUL / T50 / TM stability tests. Maintained by RND Formula; the recipe percentages are entered on each production BOM.",
-      headBtns));
+      "FFS = composition + product specification + test result + machine setup. Each submodule imports from its own n8n webhook (Settings & Data); records stay Draft until the approval chain lands. Maintained by RND Formula.",
+      []));
 
-    var wrap = UI.el("div", { class: "ffs-page" });
-    root.appendChild(wrap);
+    /* Submenu tabs: Composition keeps the original spec-sheet page; the
+       three parameter submodules live in views-formula-sub.js. */
+    var tabBar = UI.el("div", { class: "ffs-tabs", role: "tablist" });
+    var panel = UI.el("div");
+    root.appendChild(tabBar);
+    root.appendChild(panel);
+    var FFS_TABS = [["comp", "Composition"], ["lab", "Product Specification"], ["stab", "Test Result"], ["machine", "Machine Setup"]];
+    var FFS_SUB_STORE = { lab: "formulaLab", stab: "formulaStab", machine: "formulaMachine" };
+    function drawTabs() {
+      UI.clear(tabBar);
+      FFS_TABS.forEach(function (t) {
+        var n = t[0] === "comp" ? db.formulas.length : db[FFS_SUB_STORE[t[0]]].length;
+        tabBar.appendChild(UI.el("button", {
+          class: "ffs-tab", role: "tab", "aria-selected": ffsTab === t[0] ? "true" : "false",
+          onclick: function () { ffsTab = t[0]; showTab(); }
+        }, [t[1], UI.el("span", { class: "ffs-tab-n", text: String(n) })]));
+      });
+    }
+    function showTab() {
+      drawTabs();
+      UI.clear(panel);
+      if (ffsTab === "comp") renderComp(panel);
+      else ViewsFormulaSub.render(ffsTab, panel);
+    }
+
+    function renderComp(host) {
+      var headBtns = [];
+      if (canEdit && window.OCRImport && OCRImport.configuredCfg(Store.ocrConfig("formula"))) {
+        headBtns.push(UI.btn("Import from PDF", importFormulaPdf, ""));
+      }
+      if (canEdit) headBtns.push(UI.btn("+ New Formula", function () { formulaEditor(null); }, "btn-primary"));
+      if (headBtns.length) host.appendChild(UI.el("div", { class: "btn-row", style: "margin:0 0 12px" }, headBtns));
+      var wrap = UI.el("div", { class: "ffs-page" });
+      host.appendChild(wrap);
 
     function ffsFiltered() {
       var q = formulaFilter.q.toLowerCase();
@@ -1084,6 +1112,8 @@ window.ViewsMaster = (function () {
     ffsRender();
     if (!canEdit) wrap.appendChild(UI.el("div", { class: "hint", style: "margin-top:6px",
       text: "Read-only for " + ((db.meta.user || {}).role || "your role") + " - the formula master is maintained by RND Formula." }));
+    }
+    showTab();
   }
 
   /* ------------------------------------------------------------------
@@ -1117,7 +1147,7 @@ window.ViewsMaster = (function () {
       sub.textContent = "Parsing " + file.name + " with n8n\u2026 " + Math.round((Date.now() - t0) / 1000) + " s (limit 120 s)";
     }, 1000);
     function done() { clearInterval(timer); UI.closeModal(); }
-    OCRImport.parsePdf(file).then(function (payload) {
+    OCRImport.parsePdf(file, Store.ocrConfig("formula")).then(function (payload) {
       var res = OCRImport.mapToFormulaDraft(payload, Store.get());
       done();
       formulaEditor(res.existing, {
@@ -1150,28 +1180,22 @@ window.ViewsMaster = (function () {
     var isNew = !rec;
     var d = Object.assign({ id: "", kategori: "", customerId: "", urutan: 0, bj: 1, phMin: "", phMax: "",
       viscosity: "", stabTk: "-", stabTkul: "-", stabT50: "-", stabTm: "-",
-      productName: "", variant: "", note: "", lines: [] }, rec || {});
+      productName: "", variant: "", pdrNo: "", specialHandling: [], note: "", lines: [] }, rec || {});
     if (!d.lines) d.lines = [];
+    if (!d.specialHandling) d.specialHandling = [];
     if (opts.importData) {
       Object.keys(opts.importData).forEach(function (k) {
         if (opts.importData[k] !== undefined) d[k] = opts.importData[k];
       });
       d.lines = (opts.importData.lines || []).map(function (l) { return Object.assign({}, l); });
     }
-    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Urutan]" });
-    var iKat = UI.input({ value: d.kategori, placeholder: "e.g. Cream, Lotion, Serum" });
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. LB01SC04BB" });
+    var iKat = UI.select([["", "(select category)"]].concat(FFS_CATS.map(function (c) { return [c, c]; })), d.kategori || "");
     var iCust = customerCombo(d.customerId);
+    var iPdr = UI.input({ class: "input mono", value: d.pdrNo || "", placeholder: "e.g. 077/01/2026" });
     var iProductName = UI.input({ value: d.productName || "", placeholder: "e.g. Foundation Cream" });
     var iVariant = UI.input({ value: d.variant || "", placeholder: "e.g. Natural Beige" });
-    var iUrutan = UI.input({ type: "number", step: "1", min: "0", value: String(d.urutan || 0) });
     var iBj = UI.input({ type: "number", step: "0.0001", min: "0", value: String(d.bj == null ? 1 : d.bj) });
-    var iPhMin = UI.input({ type: "number", step: "0.01", value: (d.phMin === "" || d.phMin == null) ? "" : String(d.phMin) });
-    var iPhMax = UI.input({ type: "number", step: "0.01", value: (d.phMax === "" || d.phMax == null) ? "" : String(d.phMax) });
-    var iVisc = UI.input({ value: d.viscosity, placeholder: "e.g. 20000 - 30000 cP" });
-    var iTk = UI.select(STAB_OPTS, d.stabTk || "-");
-    var iTkul = UI.select(STAB_OPTS, d.stabTkul || "-");
-    var iT50 = UI.select(STAB_OPTS, d.stabT50 || "-");
-    var iTm = UI.select(STAB_OPTS, d.stabTm || "-");
     var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
     iNote.value = d.note || "";
 
@@ -1241,29 +1265,51 @@ window.ViewsMaster = (function () {
     }
     renderCompLines();
 
+    /* ---- Special-material handling (FFS tab 5) ---- */
+    var specialWrap = UI.el("div");
+    function renderSpecial() {
+      UI.clear(specialWrap);
+      var tbl = UI.el("table", { class: "editor", style: "width:100%;font-size:12.5px" });
+      tbl.appendChild(UI.el("thead", {}, [UI.el("tr", {}, [
+        UI.el("th", { text: "Material", style: "width:34%" }),
+        UI.el("th", { text: "Handling before weighing" }),
+        UI.el("th", { style: "width:36px" })
+      ])]));
+      var tb = UI.el("tbody");
+      d.specialHandling.forEach(function (sh, idx) {
+        var iMat = UI.input({ value: sh.material || "", placeholder: "e.g. Semua Pasta / material code", style: "width:100%" });
+        iMat.addEventListener("input", function () { sh.material = iMat.value; });
+        var iHand = UI.input({ value: sh.handling || "", placeholder: "e.g. Diaduk sebelum ditimbang", style: "width:100%" });
+        iHand.addEventListener("input", function () { sh.handling = iHand.value; });
+        tb.appendChild(UI.el("tr", {}, [
+          UI.el("td", {}, [iMat]), UI.el("td", {}, [iHand]),
+          UI.el("td", {}, [UI.btn("\u00d7", function () { d.specialHandling.splice(idx, 1); renderSpecial(); }, "btn-danger btn-sm")])
+        ]));
+      });
+      if (!d.specialHandling.length) tb.appendChild(UI.el("tr", {}, [UI.el("td", { colspan: "3", class: "empty", text: "No special-material handling notes." })]));
+      tbl.appendChild(tb);
+      specialWrap.appendChild(tbl);
+      specialWrap.appendChild(UI.el("div", { style: "margin-top:6px" }, [
+        UI.btn("+ Add handling", function () { d.specialHandling.push({ material: "", handling: "" }); renderSpecial(); }, "btn-sm")
+      ]));
+    }
+    renderSpecial();
+
     var body = UI.el("div", {}, [
       UI.el("div", { class: "form-grid" }, [
-        UI.field("Formula Code", iCode, "Formula code, e.g. MR03-BN-01"),
-        UI.field("Kategori", iKat),
+        UI.field("Formula Code", iCode, "The doc Kode, e.g. LB01SC04BB (never the FFS document number)."),
         UI.field("Customer", iCust),
+        UI.field("PDR No. (Marketing)", iPdr),
         UI.field("Product Name", iProductName),
         UI.field("Variant", iVariant),
-        UI.field("Urutan", iUrutan),
-        UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss)."),
-        UI.field("Viscosity", iVisc)
+        UI.field("Kategori", iKat),
+        UI.field("BJ (specific gravity)", iBj, "Must be > 0; used by netting: qty x netto x BJ x (1+loss).")
       ]),
-      fieldset("pH range", [UI.el("div", { class: "form-grid" }, [
-        UI.field("pH min", iPhMin, "Leave blank if not specified."),
-        UI.field("pH max", iPhMax)
-      ])]),
-      fieldset("Stability tests", [UI.el("div", { class: "form-grid" }, [
-        UI.field("TK (room temp)", iTk),
-        UI.field("TKUL (refrigerator)", iTkul),
-        UI.field("T50 (oven 50\u00b0C)", iT50),
-        UI.field("TM (sunlight)", iTm)
-      ])]),
+      UI.el("p", { class: "hint", style: "margin:2px 0 10px",
+        text: "pH, viscosity and stability results are edited in the Product Specification and Test Result submodules; they feed this formula automatically." }),
       UI.field("Note", iNote),
-      fieldset("Material Composition", [compWrap])
+      fieldset("Material Composition", [compWrap]),
+      fieldset("Special-material handling (FFS tab 5)", [specialWrap])
     ]);
     if (opts.importInfo) body.insertBefore(importBanner(opts.importInfo, rec), body.firstChild);
     UI.modal({
@@ -1271,19 +1317,17 @@ window.ViewsMaster = (function () {
       body: body, wide: true,
       actions: [{
         label: "Save Formula", cls: "btn-primary", onClick: function () {
-          d.id = iCode.value.trim(); d.kategori = iKat.value.trim(); d.customerId = iCust.value || "";
+          d.id = iCode.value.trim(); d.kategori = iKat.value; d.customerId = iCust.value || "";
+          d.pdrNo = iPdr.value.trim();
           d.productName = iProductName.value.trim(); d.variant = iVariant.value.trim();
-          d.urutan = Number(iUrutan.value) || 0; d.bj = Number(iBj.value) || 0;
-          d.phMin = iPhMin.value === "" ? null : Number(iPhMin.value);
-          d.phMax = iPhMax.value === "" ? null : Number(iPhMax.value);
-          d.viscosity = iVisc.value.trim();
-          d.stabTk = iTk.value; d.stabTkul = iTkul.value; d.stabT50 = iT50.value; d.stabTm = iTm.value;
+          d.bj = Number(iBj.value) || 0;
           d.note = iNote.value.trim();
-          if (!d.id) { UI.toast("Formula code is required", "err"); return; }
+          d.specialHandling = d.specialHandling.filter(function (sh) { return (sh.material || "").trim() || (sh.handling || "").trim(); })
+            .map(function (sh) { return { material: (sh.material || "").trim(), handling: (sh.handling || "").trim() }; });
+          if (!d.id) { UI.toast("Formula Code is required", "err"); return; }
           if (!(d.bj > 0)) { UI.toast("BJ must be greater than 0", "err"); return; }
-          if (d.phMin != null && d.phMax != null && d.phMax < d.phMin) { UI.toast("pH max must be >= pH min", "err"); return; }
-          if (isNew && Store.formulaById(d.id)) { UI.toast("Formula code already exists", "err"); return; }
-          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("Formula code already exists", "err"); return; }
+          if (isNew && Store.formulaById(d.id)) { UI.toast("Formula Code already exists", "err"); return; }
+          if (!isNew && d.id !== rec.id && Store.formulaById(d.id)) { UI.toast("Formula Code already exists", "err"); return; }
           /* clean lines: remove empty material rows */
           d.lines = d.lines.filter(function (l) { return l.materialCode; });
           Store.saveFormula(d, isNew, rec ? rec.id : null);
@@ -1307,9 +1351,9 @@ window.ViewsMaster = (function () {
     var db = Store.get();
     var canEdit = RBAC.canEditMaster("packagings");
     root.appendChild(UI.pageHead("Master Packaging (FPS)",
-      "Packaging parameters (form FR-PD-02 / SBK ST-PD-01): nominal fill volume with its tolerance band and inkjet syntax. Maintained by RND Kemas; component supply ownership is set on each production BOM.",
+      "Packaging parameters (FR-PD-03 / PD00100): variants, container, nominal fill volume with its absolute QA band, packing machines and process steps. NA is supplied by Regulatory on the F/G later. Maintained by RND Kemas.",
       canEdit ? [UI.btn("+ New Packaging", function () { packagingEditor(null); }, "btn-primary")] : []));
-    var search = UI.input({ placeholder: "Search FPS code / inkjet...", value: packFilter.q });
+    var search = UI.input({ placeholder: "Search FPS code, product, customer, variant...", value: packFilter.q });
     search.addEventListener("input", function () { packFilter.q = search.value; draw(); });
     var bodyWrap = UI.el("div");
     function draw() {
@@ -1317,16 +1361,25 @@ window.ViewsMaster = (function () {
       var q = packFilter.q.toLowerCase();
       var rows = db.packagings.filter(function (p) {
         if (!q) return true;
-        return (p.id + " " + (p.inkjetSyntax || "") + " " + customerName(p.customerId)).toLowerCase().indexOf(q) >= 0;
+        return (p.id + " " + (p.productName || "") + " " + (p.inkjetSyntax || "") + " " +
+          customerName(p.customerId) + " " + (p.variants || []).join(" ")).toLowerCase().indexOf(q) >= 0;
       }).sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
       bodyWrap.appendChild(UI.table([
         { label: "FPS Code", cls: "mono", render: function (r) { return "<b>" + Engine.esc(r.id) + "</b>"; } },
         { label: "Customer", render: function (r) { return Engine.esc(customerName(r.customerId) || "-"); } },
-        { label: "Varian", cls: "num", render: function (r) { return String(r.urutanVarian || 0); } },
-        { label: "Volume (mL)", cls: "num", render: function (r) {
-          return Engine.fmtNum(r.volumeMl || 0) + (r.fillTolPct ? " \u00b1" + Engine.fmtNum(r.fillTolPct) + "%" : "");
+        { label: "Product", render: function (r) { return Engine.esc(r.productName || "-"); } },
+        { label: "Variants", render: function (r) {
+          var v = r.variants || [];
+          return v.length ? Engine.esc(v.join(", ")) : "<span class='row-muted'>\u2014</span>";
         } },
-        { label: "Inkjet syntax", cls: "mono", render: function (r) { return Engine.esc(r.inkjetSyntax || "-"); } },
+        { label: "Fill (mL)", cls: "num", render: function (r) {
+          var s = Engine.fmtNum(r.volumeMl || 0);
+          if (r.fillMinMl != null && r.fillMaxMl != null) {
+            return s + " <span class='row-muted'>(" + Engine.fmtNum(r.fillMinMl) + "\u2013" + Engine.fmtNum(r.fillMaxMl) + ")</span>";
+          }
+          return s + (r.fillTolPct ? " \u00b1" + Engine.fmtNum(r.fillTolPct) + "%" : "");
+        } },
+        { label: "Inkjet positions", render: function (r) { return Engine.esc(r.inkjetSyntax || "-"); } },
         { label: "Lines", cls: "num", render: function (r) {
           var n = compLines("KEMAS", "packagingId", r.id).length;
           return n ? "<b>" + n + "</b>" : "<span class='row-muted'>0</span>";
@@ -1357,17 +1410,85 @@ window.ViewsMaster = (function () {
   function packagingEditor(rec) {
     if (!RBAC.canEditMaster("packagings")) { UI.toast("Packaging master is read-only for your role", "err"); return; }
     var isNew = !rec;
-    var d = Object.assign({ id: "", customerId: "", urutanVarian: 0, volumeMl: 0, fillTolPct: 0,
-      inkjetSyntax: "", note: "", lines: [] }, rec || {});
+    var d = Object.assign({ id: "", customerId: "", productName: "", urutanVarian: 0,
+      volumeMl: 0, fillTolPct: 0, fillMinMl: null, fillMaxMl: null,
+      storageTemp: "", mboxQty: 0, inkjetSyntax: "", note: "",
+      variants: [], container: [], machines: [], steps: [], lines: [] }, rec || {});
     if (!d.lines) d.lines = [];
-    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "[Kategori]-[Customer]-[Varian]" });
+    if (!d.variants) d.variants = [];
+    if (!d.container) d.container = [];
+    if (!d.machines) d.machines = [];
+    if (!d.steps) d.steps = [];
+    var iCode = UI.input({ class: "input mono", value: d.id, placeholder: "e.g. 10040300 (NO FG)" });
     var iCust = customerCombo(d.customerId);
-    var iVarian = UI.input({ type: "number", step: "1", min: "0", value: String(d.urutanVarian || 0) });
+    var iProd = UI.input({ value: d.productName || "", placeholder: "e.g. SASC Liquid Blush" });
     var iVol = UI.input({ type: "number", step: "0.01", min: "0", value: String(d.volumeMl || 0) });
-    var iTol = UI.input({ type: "number", step: "0.1", min: "0", max: "100", value: String(d.fillTolPct || 0) });
-    var iInk = UI.input({ class: "input mono", value: d.inkjetSyntax, placeholder: "e.g. EXP {MM/YY} BATCH {NO}" });
+    var iFillMin = UI.input({ type: "number", step: "0.01", min: "0", value: d.fillMinMl == null ? "" : String(d.fillMinMl) });
+    var iFillMax = UI.input({ type: "number", step: "0.01", min: "0", value: d.fillMaxMl == null ? "" : String(d.fillMaxMl) });
+    var iStore = UI.input({ value: d.storageTemp || "", placeholder: "e.g. 25\u201337 \u00b0C" });
+    var iMbox = UI.input({ type: "number", step: "1", min: "0", value: String(d.mboxQty || 0) });
+    var iInk = UI.input({ value: d.inkjetSyntax || "", placeholder: "e.g. bottom sticker \u00b7 box satuan \u00b7 mbox" });
     var iNote = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
     iNote.value = d.note || "";
+
+    /* ---- Reusable name-list editor (variants / container / machines) ---- */
+    function stringList(arr, placeholder, addLabel, emptyText) {
+      var wrap = UI.el("div");
+      function draw() {
+        UI.clear(wrap);
+        arr.forEach(function (val, idx) {
+          var row = UI.el("div", { class: "btn-row", style: "margin:0 0 4px;align-items:center" });
+          var inp = UI.input({ value: val || "", placeholder: placeholder, style: "flex:1" });
+          inp.addEventListener("input", function () { arr[idx] = inp.value; });
+          row.appendChild(inp);
+          row.appendChild(UI.btn("\u00d7", function () { arr.splice(idx, 1); draw(); }, "btn-danger btn-sm"));
+          wrap.appendChild(row);
+        });
+        if (!arr.length) wrap.appendChild(UI.el("p", { class: "hint", style: "margin:0 0 4px", text: emptyText }));
+        wrap.appendChild(UI.el("div", {}, [UI.btn(addLabel, function () { arr.push(""); draw(); }, "btn-sm")]));
+      }
+      draw();
+      return wrap;
+    }
+    var variantsWrap = stringList(d.variants, "e.g. Rich Girl Era", "+ Add variant", "No variants listed yet.");
+    var containerWrap = stringList(d.container, "e.g. Pot, Inner plug, Cap", "+ Add container part", "No container parts listed yet.");
+    var machinesWrap = stringList(d.machines, "e.g. Inkjet print, Mesin segel, Shrink tunnel", "+ Add machine", "No packing machines listed yet.");
+
+    /* ---- Packing process steps (step + parameter / standard) ---- */
+    var stepsWrap = UI.el("div");
+    function drawSteps() {
+      UI.clear(stepsWrap);
+      var tbl = UI.el("table", { class: "editor", style: "width:100%;font-size:12.5px" });
+      tbl.appendChild(UI.el("thead", {}, [UI.el("tr", {}, [
+        UI.el("th", { text: "No", style: "width:32px" }),
+        UI.el("th", { text: "Packing step" }),
+        UI.el("th", { text: "Parameter / standard", style: "width:200px" }),
+        UI.el("th", { text: "", style: "width:36px" })
+      ])]));
+      var tb = UI.el("tbody");
+      d.steps.forEach(function (st, idx) {
+        var tr = UI.el("tr");
+        tr.appendChild(UI.el("td", { text: String(idx + 1) }));
+        var iStep = UI.el("textarea", { class: "input", rows: "2", style: "width:100%" });
+        iStep.value = st.step || "";
+        iStep.addEventListener("input", function () { st.step = iStep.value; });
+        tr.appendChild(UI.el("td", {}, [iStep]));
+        var iParam = UI.input({ value: st.param || "", placeholder: "e.g. Sesuai \u00b7 rapi", style: "width:100%" });
+        iParam.addEventListener("input", function () { st.param = iParam.value; });
+        tr.appendChild(UI.el("td", {}, [iParam]));
+        tr.appendChild(UI.el("td", {}, [UI.btn("\u00d7", function () {
+          d.steps.splice(idx, 1); drawSteps();
+        }, "btn-danger btn-sm", { style: "padding:2px 7px;font-size:14px" })]));
+        tb.appendChild(tr);
+      });
+      if (!d.steps.length) tb.appendChild(UI.el("tr", {}, [UI.el("td", { colspan: "4", class: "empty", text: "No packing steps yet." })]));
+      tbl.appendChild(tb);
+      stepsWrap.appendChild(tbl);
+      stepsWrap.appendChild(UI.el("div", { style: "margin-top:6px" }, [
+        UI.btn("+ Add step", function () { d.steps.push({ step: "", param: "" }); drawSteps(); }, "btn-sm")
+      ]));
+    }
+    drawSteps();
 
     /* ---- Editable Packaging Composition (source of truth for BOM) ---- */
     var KEMAS_CATS = ["PKG-INT", "PKG-EXT", "PM"];
@@ -1431,15 +1552,23 @@ window.ViewsMaster = (function () {
 
     var body = UI.el("div", {}, [
       UI.el("div", { class: "form-grid" }, [
-        UI.field("FPS Code", iCode),
+        UI.field("FPS Code", iCode, "Packaging master code (NO FG) - not the F/G product code."),
         UI.field("Customer", iCust),
-        UI.field("Variant Order", iVarian),
-        UI.field("Volume (mL)", iVol, "Nominal fill volume."),
-        UI.field("Tolerance (\u00b1%)", iTol, "Sets the QA fill-check band: volume \u00b1 this percentage."),
-        UI.field("Inkjet syntax", iInk)
+        UI.field("Product Name", iProd),
+        UI.field("Volume / Netto (mL)", iVol, "Nominal fill volume."),
+        UI.field("Fill min (mL)", iFillMin, "Absolute QA fill band; overrides nominal \u00b1 tolerance when both are set."),
+        UI.field("Fill max (mL)", iFillMax),
+        UI.field("FG storage temp", iStore),
+        UI.field("Mbox qty (pcs)", iMbox),
+        UI.field("Inkjet positions", iInk)
       ]),
       UI.field("Note", iNote),
-      fieldset("Packaging Composition", [compWrap])
+      fieldset("Variants (names only)", [variantsWrap,
+        UI.el("p", { class: "hint", style: "margin:6px 0 0", text: "NA numbers are supplied by Regulatory on the F/G later - not stored here." })]),
+      fieldset("Container", [containerWrap]),
+      fieldset("Packaging Composition", [compWrap]),
+      fieldset("Packing machines", [machinesWrap]),
+      fieldset("Packing process steps", [stepsWrap])
     ]);
     UI.modal({
       title: isNew ? "New Packaging (FPS)" : "Edit Packaging - " + rec.id,
@@ -1447,14 +1576,33 @@ window.ViewsMaster = (function () {
       actions: [{
         label: "Save Packaging", cls: "btn-primary", onClick: function () {
           d.id = iCode.value.trim(); d.customerId = iCust.value || "";
-          d.urutanVarian = Number(iVarian.value) || 0;
-          d.volumeMl = Number(iVol.value) || 0; d.fillTolPct = Number(iTol.value) || 0;
+          d.productName = iProd.value.trim();
+          d.volumeMl = Number(iVol.value) || 0;
+          d.fillMinMl = iFillMin.value.trim() === "" ? null : Number(iFillMin.value);
+          d.fillMaxMl = iFillMax.value.trim() === "" ? null : Number(iFillMax.value);
+          d.storageTemp = iStore.value.trim();
+          d.mboxQty = Number(iMbox.value) || 0;
           d.inkjetSyntax = iInk.value.trim();
           d.note = iNote.value.trim();
+          d.variants = d.variants.map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+          d.container = d.container.map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+          d.machines = d.machines.map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+          d.steps = d.steps.map(function (s) { return { step: String(s.step || "").trim(), param: String(s.param || "").trim() }; })
+            .filter(function (s) { return s.step || s.param; });
+          d.urutanVarian = d.variants.length;
+          /* derive the legacy tolerance band for list/BOM display; the QA check
+             itself prefers the absolute fillMinMl/fillMaxMl recorded above */
+          if (d.fillMinMl != null && d.fillMaxMl != null && d.volumeMl > 0) {
+            var dev = Math.max(Math.abs(d.fillMaxMl - d.volumeMl), Math.abs(d.volumeMl - d.fillMinMl));
+            d.fillTolPct = Math.round(dev / d.volumeMl * 10000) / 100;
+          }
           /* drop the pre-012 parameters an old working copy may carry */
           delete d.fillMin; delete d.fillMax; delete d.revisi; delete d.shrinkTunnelC;
           if (!d.id) { UI.toast("FPS code is required", "err"); return; }
           if (d.volumeMl < 0) { UI.toast("Volume must be >= 0", "err"); return; }
+          if (d.fillMinMl != null && d.fillMinMl < 0) { UI.toast("Fill min must be >= 0", "err"); return; }
+          if (d.fillMaxMl != null && d.fillMaxMl < 0) { UI.toast("Fill max must be >= 0", "err"); return; }
+          if (d.fillMinMl != null && d.fillMaxMl != null && d.fillMaxMl < d.fillMinMl) { UI.toast("Fill max must be >= fill min", "err"); return; }
           if (d.fillTolPct < 0 || d.fillTolPct > 100) { UI.toast("Tolerance must be between 0 and 100%", "err"); return; }
           if (isNew && Store.packagingById(d.id)) { UI.toast("FPS code already exists", "err"); return; }
           if (!isNew && d.id !== rec.id && Store.packagingById(d.id)) { UI.toast("FPS code already exists", "err"); return; }

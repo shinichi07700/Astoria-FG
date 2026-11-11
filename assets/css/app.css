@@ -1056,3 +1056,35 @@ body.login-mode .topbar-right { display: none; }
   .ffs-page .ffs-legend { grid-template-columns: 1fr; }
   .ffs-page .ffs-panel { margin: 0 10px 12px; padding: 16px; }
 }
+
+/* ---------- Master Formula submenu tabs + submodule import preview ---------- */
+.ffs-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1.5px solid var(--line-strong); margin: 0 0 16px; }
+.ffs-tab {
+  appearance: none; border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px 11px;
+  font: 600 13.5px var(--font); color: var(--muted);
+  border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+  transition: color .16s ease;
+}
+.ffs-tab:hover { color: var(--accent-dark); }
+.ffs-tab[aria-selected="true"] { color: var(--accent-dark); border-bottom-color: var(--accent); }
+.ffs-tab-n { font: 600 10.5px var(--mono); background: #efedee; color: var(--muted); border-radius: 999px; padding: 2px 7px; }
+.ffs-tab[aria-selected="true"] .ffs-tab-n { background: var(--accent-soft); color: var(--accent-dark); }
+.sub-dot { display: inline-flex; align-items: center; gap: 6px; font: 500 11.5px var(--mono); color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
+.sub-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.sub-dot.off i { background: var(--line-strong); }
+.sub-match { display: inline-block; font: 500 12px var(--mono); border-radius: 8px; padding: 7px 11px; border: 1px solid; }
+.sub-match.hit { color: var(--green); background: var(--green-soft); border-color: #bfe3cf; }
+.sub-match.miss { color: #b42318; background: #fdeceb; border-color: #f0c4c0; }
+.sub-sec { font: 600 11px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 16px 0 7px; }
+table.sub-preview td:first-child { width: 220px; color: var(--muted); font-weight: 500; background: var(--bg); }
+table.sub-preview td.sub-blank { color: var(--faint); font-style: italic; }
+.sub-lamps { white-space: nowrap; }
+
+/* Nested machine editor: phase -> step -> machine param-set (FFS tab 6). */
+.sub-phase { border: 1px solid var(--line-strong); border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+.sub-phase > .sub-ph-head { background: var(--accent-soft); padding: 6px 9px; display: flex; gap: 8px; align-items: center; }
+.sub-step { border-top: 1px solid var(--line); padding: 8px 9px; }
+.sub-param { border: 1px dashed var(--line-strong); border-radius: 5px; padding: 6px; margin-top: 6px; background: #fffdfd; }
+.sub-param .sub-ps-head { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; flex-wrap: wrap; }
+.sub-param .sub-ps-head select { max-width: 280px; }
