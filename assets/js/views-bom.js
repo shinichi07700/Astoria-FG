@@ -159,6 +159,11 @@ window.ViewsBom = (function () {
       if (isNew) pvNo.textContent = previewNo();
       renderLines("FORMULA"); renderLines("KEMAS");
     }
+    function fgLinkWarning() {
+      var fgL = Store.fgById(d.fgId);
+      if (fgL && fgL.formulaId && d.formulaId && fgL.formulaId !== d.formulaId) UI.toast("Warning: BOM formula differs from the F/G's linked formula", "err");
+      if (fgL && fgL.packagingId && d.packagingId && fgL.packagingId !== d.packagingId) UI.toast("Warning: BOM packaging differs from the F/G's linked FPS", "err");
+    }
     /* ---- Inherit composition from linked FFS/FPS masters ----
        When formula/packaging master is linked, sync replaces the BOM items
        with lines derived from the master's own `lines` array (source of truth). */
@@ -407,6 +412,7 @@ window.ViewsBom = (function () {
         syncHeader();
         var perr = formulaPctError();
         if (perr) { UI.toast(perr, "err"); return; }
+        fgLinkWarning();
         if (isNew) {
           d.id = Store.uid("BOM");
           d.noBom = Engine.noBom(Store.nextSeq("bom"), d.noCustomer, d.mulaiBerlaku);
@@ -423,6 +429,7 @@ window.ViewsBom = (function () {
         syncHeader();
         var perr2 = formulaPctError();
         if (perr2) { UI.toast(perr2, "err"); return; }
+        fgLinkWarning();
         if (isNew) {
           d.id = Store.uid("BOM");
           d.noBom = Engine.noBom(Store.nextSeq("bom"), d.noCustomer, d.mulaiBerlaku);
