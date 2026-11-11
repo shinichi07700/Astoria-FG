@@ -10,20 +10,22 @@ window.RBAC = (function () {
   var ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory", "Marketing",
     "PPIC", "Purchasing", "Warehouse", "Production", "QA", "Finance"];
 
-  /* Master F/G write access: Admin plus the three master-data owners.
-     Marketing (SO), Finance (copy codes), PPIC and QA (BMR / picking)
-     consume the list read-only. */
-  var FG_EDITOR_ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory"];
+  /* Master F/G write access: Admin plus the master-data owners. Marketing
+     issues the brand segment of the 13-char SKU; Finance (copy codes), PPIC
+     and QA (BMR / picking) consume the list read-only. */
+  var FG_EDITOR_ROLES = ["Admin", "RND Formula", "RND Kemas", "Regulatory", "Marketing"];
   /* Field ownership inside the F/G editor - who may input/edit which column:
      Admin         -> everything
      RND Formula   -> Formula code + Deskripsi + Discontinue
      RND Kemas     -> FPS code + Deskripsi + Discontinue
-     Regulatory    -> Formula code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue */
+     Regulatory    -> Formula code + Deskripsi + Kode NA + Tgl Expire NA + Discontinue
+     Marketing     -> Brand + Deskripsi (owns the brand segment of the SKU code) */
   var FG_FIELD_RIGHTS = {
-    "Admin":       { ffs: true, fps: true, desc: true, na: true, exp: true, disc: true },
-    "RND Formula": { ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
-    "RND Kemas":   { ffs: false, fps: true, desc: true, na: false, exp: false, disc: true },
-    "Regulatory":  { ffs: true, fps: false, desc: true, na: true, exp: true, disc: true }
+    "Admin":       { brand: true, ffs: true, fps: true, desc: true, na: true, exp: true, disc: true },
+    "RND Formula": { brand: false, ffs: true, fps: false, desc: true, na: false, exp: false, disc: true },
+    "RND Kemas":   { brand: false, ffs: false, fps: true, desc: true, na: false, exp: false, disc: true },
+    "Regulatory":  { brand: false, ffs: true, fps: false, desc: true, na: true, exp: true, disc: true },
+    "Marketing":   { brand: true, ffs: false, fps: false, desc: true, na: false, exp: false, disc: false }
   };
   /* Settings & Data (backups, reset, role management) is Admin-only once a
      cloud session exists; offline there are no accounts at all. */
@@ -32,6 +34,7 @@ window.RBAC = (function () {
   /* Ownership of the pipeline masters introduced by migration 002 */
   var MASTER_EDITORS = {
     customers: ["Marketing"],
+    brands: ["Marketing"],
     suppliers: ["Purchasing"],
     formulas: ["RND Formula"],
     packagings: ["RND Kemas"],
@@ -197,7 +200,7 @@ window.RBAC = (function () {
                      "Formula Product Specification", "Formula Test Result", "Formula Machine Setup"],
     "RND Kemas":    ["Master F/G", "Master Packaging (FPS)", "Bill of Material"],
     "Regulatory":   ["Master F/G"],
-    "Marketing":    ["Master Customer", "Sales Order", "Master F/G"],
+    "Marketing":    ["Master Customer", "Master Brand", "Sales Order", "Master F/G"],
     "PPIC":         ["Bill of Material", "PPIC Netting", "Sales Order", "Purchase Request",
                      "Material Request", "Order Simulation", "Mixer catalogue"],
     "Purchasing":   ["Master Supplier", "Master Material", "Purchase Order", "Inventory Lot",

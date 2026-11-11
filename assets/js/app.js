@@ -8,6 +8,7 @@ window.App = (function () {
     { id: "fg", label: "Master F/G", group: "Master Data" },
     { id: "materials", label: "Master Material", group: "Master Data" },
     { id: "customers", label: "Master Customer", group: "Master Data" },
+    { id: "brands", label: "Master Brand", group: "Master Data" },
     { id: "suppliers", label: "Master Supplier", group: "Master Data" },
     { id: "formulas", label: "Master Formula", group: "Master Data" },
     { id: "packagings", label: "Master Packaging", group: "Master Data" },
@@ -21,6 +22,7 @@ window.App = (function () {
     { id: "logistics", label: "FG & Logistics", group: "Supply Chain" },
     { id: "production", label: "Production", group: "Production" },
     { id: "qa", label: "QA / QC", group: "Production" },
+    { id: "recode", label: "SKU Recode", group: "Control" },
     { id: "audit", label: "Audit Log", group: "Control" },
     { id: "users", label: "Master User", group: "Control" },
     { id: "settings", label: "Settings & Data", group: "Control" }
@@ -30,6 +32,7 @@ window.App = (function () {
     fg: function (r) { ViewsMaster.fg(r); },
     materials: function (r) { ViewsMaster.materials(r); },
     customers: function (r) { ViewsMaster.customers(r); },
+    brands: function (r) { ViewsBrand.list(r); },
     suppliers: function (r) { ViewsMaster.suppliers(r); },
     formulas: function (r) { ViewsMaster.formulas(r); },
     packagings: function (r) { ViewsMaster.packagings(r); },
@@ -43,6 +46,7 @@ window.App = (function () {
     logistics: function (r) { ViewsLogistics.list(r); },
     production: function (r) { ViewsProduction.list(r); },
     qa: function (r) { ViewsQA.list(r); },
+    recode: function (r) { ViewsRecode.list(r); },
     audit: function (r) { ViewsSim.audit(r); },
     users: function (r) { ViewsUsers.staff(r); },
     settings: function (r) { ViewsSim.settings(r); }
@@ -69,6 +73,7 @@ window.App = (function () {
     NAV.forEach(function (n) {
       if (n.id === "settings" && !canOpenSettings()) return;
       if (n.id === "users" && !canOpenUsers()) return;
+      if (n.id === "recode" && !RBAC.isAdmin()) return;
       if (n.group !== lastGroup) {
         nav.appendChild(UI.el("div", { class: "nav-group-label", text: n.group }));
         lastGroup = n.group;
@@ -85,6 +90,7 @@ window.App = (function () {
   function go(id) {
     if (id === "settings" && !canOpenSettings()) id = "dashboard";
     if (id === "users" && !canOpenUsers()) id = "dashboard";
+    if (id === "recode" && !RBAC.isAdmin()) id = "dashboard";
     if (id !== "bom") ViewsBom.resetEditor();
     closeDrawer();
     current = id;

@@ -125,6 +125,14 @@ Object.keys(RIGHT_TO_COL).forEach(function (right) {
   });
   COL_ROLES[col] = U(roles);            /* Admin always allowed */
 });
+/* 020 SKU link columns. brand_id is owned by Marketing (the new brand right);
+   formula_id / packaging_id mirror the ffs / fps ownership. These columns only
+   exist after migration 020, which re-emits this guard itself - 008 precedes
+   020, so the generator is kept consistent here but NOT re-run over the applied
+   008/013 files. */
+COL_ROLES.brand_id = U(["Marketing"]);
+COL_ROLES.formula_id = COL_ROLES.ffs;
+COL_ROLES.packaging_id = COL_ROLES.fps;
 
 /* ---- SQL emission ---- */
 function arr(roles) { return "array[" + roles.map(function (r) { return "'" + r + "'"; }).join(", ") + "]"; }
@@ -238,8 +246,8 @@ w("returns trigger language plpgsql security definer set search_path = public as
 w("declare r text := public.auth_role();");
 w("begin");
 w("  if r is null or r = 'Admin' then return new; end if;");
-Object.keys(RIGHT_TO_COL).forEach(function (right) {
-  var col = RIGHT_TO_COL[right], roles = COL_ROLES[col];
+Object.keys(COL_ROLES).forEach(function (col) {
+  var roles = COL_ROLES[col];
   w("  if (new." + col + " is distinct from old." + col + ") and not (r = any (" + arr(roles) + ")) then");
   w("    raise exception 'fg_master." + col + " is owned by " + roles.filter(function (x) { return x !== "Admin"; }).join(" / ") + " (current role: %)', r;");
   w("  end if;");
@@ -328,5 +336,5 @@ console.log("Wrote " + path.relative(process.cwd(), dest));
 console.log("Wrote " + path.relative(process.cwd(), guardDest) + "  (profiles.role guard)");
 console.log("  tables policed : " + ALL_TABLES.length + " (+ audit_log, profiles)");
 console.log("  create policy  : " + policyCount);
-console.log("  column guard   : fg_master [" + Object.keys(RIGHT_TO_COL).map(function (k) { return RIGHT_TO_COL[k]; }).join(", ") + "]");
+console.log("  column guard   : fg_master [" + Object.keys(COL_ROLES).join(", ") + "]");
 console.log("  roles          : " + RBAC.ROLES.length + " [" + RBAC.ROLES.join(", ") + "]");
