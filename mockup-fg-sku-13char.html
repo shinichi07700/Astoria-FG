@@ -160,8 +160,8 @@
         <div class="preview-box">
           <div>
             <div class="pv-label">F/G SKU Code (auto, 13 chars)</div>
-            <div class="pv-kode" id="pvKode">BRLEYCP012A01</div>
-            <div class="pv-seg" id="pvSeg">Seq 012 · Size A (5 mL) · Rev 01</div>
+            <div class="pv-kode" id="pvKode">MSLSKLQ001A01</div>
+            <div class="pv-seg" id="pvSeg">Seq 001 · Size A (100 mL) · Rev 01</div>
             <div class="breakdown" id="pvBreak"></div>
           </div>
           <div>
@@ -176,31 +176,36 @@
             <div class="field">
               <label>Brand</label>
               <select class="input mono" id="iBrand">
-                <option value="BRL" selected>BRL — Browlash</option>
-                <option value="LVR">LVR — Laverne</option>
-                <option value="LBS">LBS — Labose</option>
-                <option value="SKD">SKD — Skindee</option>
-                <option value="MSL">MSL — Marieskin</option>
+                <option value="MSL" selected>MSL — Marieskinlian</option>
+                <option value="LVR">LVR — LOVRA</option>
+                <option value="LBS">LBS — LASHBOSS</option>
+                <option value="BRL">BRL — B ERL</option>
+                <option value="BBY">BBY — BBYU</option>
+                <option value="AST">AST — ASTORIA</option>
+                <option value="SKD">SKD — SKINDOZE</option>
               </select>
               <span class="hint">Marketing owns brand codes.</span>
             </div>
             <div class="field">
               <label>Formula (FFS)</label>
               <select class="input" id="iFfs">
-                <option value="f1" selected>FFS-BRL-EY-012 — Browlash Eye Compact</option>
-                <option value="f2">FFS-BRL-FC-003 — Browlash Face Cream</option>
-                <option value="f3">FFS-LVR-SK-001 — Laverne Skin Toner</option>
-                <option value="f4">FFS-LBS-CL-001 — Labose Cleanser Liquid</option>
+                <option value="t1" selected>TO01MR03 — Marieskinlian Glowing Skin Toner</option>
+                <option value="t2">FWS01BN01FWB — LOVRA Brightening Facial Wash</option>
+                <option value="t3">DE01RN02DC — LOVRA Brightening Day Cream</option>
+                <option value="t4">LC01BLO5S — B ERL La Belle Colorstay Lip Velvet</option>
+                <option value="t5">FB01NS02T — BBYU Pearl Filter Satin Cushion</option>
+                <option value="t6">GC01VP01 — ASTORIA Glow Vitamin C Serum</option>
               </select>
               <span class="hint">RND Formula owns the link. Sets App + Form.</span>
             </div>
             <div class="field">
               <label>Packaging (FPS)</label>
               <select class="input" id="iFps">
-                <option value="p1" selected>100200100 — Compact 5 mL · rev 1</option>
-                <option value="p2">100200101 — Compact 9 mL · rev 1</option>
-                <option value="p3">100200102 — Compact 5 mL · rev 2</option>
-                <option value="p4">100200200 — Jar 50 mL · rev 1</option>
+                <option value="p1" selected>100200100 — Toner bottle 100 mL · rev 1</option>
+                <option value="p2">10020200 — Day cream jar 30 g · rev 1</option>
+                <option value="p3">10110100 — Lip velvet tube 4 g · rev 1</option>
+                <option value="p4">10170500 — Cushion compact 12 g · rev 1</option>
+                <option value="p5">100200101 — Toner bottle 100 mL · rev 2</option>
               </select>
               <span class="hint">RND Kemas owns the link. Sets Size + Rev.</span>
             </div>
@@ -211,7 +216,7 @@
           <legend>Regulatory</legend>
           <div class="field">
             <label>Product Description</label>
-            <input class="input" id="iDesc" value="Browlash Eye Compact Powder 5 mL">
+            <input class="input" id="iDesc" value="Marieskinlian Glowing Skin Toner 100 ml">
           </div>
           <div class="form-grid">
             <div class="field">
@@ -255,15 +260,15 @@
         <table class="tbl">
           <thead><tr><th>Brand Code</th><th>Brand Name</th><th>Customer</th><th>SKUs</th><th></th></tr></thead>
           <tbody>
-            <tr><td class="mono">BRL</td><td>Browlash</td><td>PT Browlash Indonesia</td><td>4</td>
+            <tr><td class="mono">MSL</td><td>Marieskinlian</td><td>Marieskinlian</td><td>1</td>
               <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
-            <tr><td class="mono">LVR</td><td>Laverne</td><td>PT Laverne Kosmetik</td><td>3</td>
+            <tr><td class="mono">LVR</td><td>LOVRA</td><td>LOVRA</td><td>2</td>
               <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
-            <tr><td class="mono">LBS</td><td>Labose</td><td>PT Labose Beauty</td><td>4</td>
+            <tr><td class="mono">LBS</td><td>LASHBOSS</td><td>LASHBOSS</td><td>4</td>
               <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
-            <tr><td class="mono">MSL</td><td>Marieskin</td><td>PT Marieskin Natura</td><td>1</td>
+            <tr><td class="mono">BRL</td><td>B ERL</td><td>B ERL</td><td>1</td>
               <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
-            <tr><td class="mono">SKD</td><td>Skindee</td><td><span class="row-muted">-</span></td><td>2</td>
+            <tr><td class="mono">SKD</td><td>SKINDOZE</td><td><span class="row-muted">-</span></td><td>2</td>
               <td><div class="btn-row"><button class="btn btn-sm" type="button">Edit</button><button class="btn btn-danger btn-sm" type="button">Delete</button></div></td></tr>
           </tbody>
         </table>
@@ -276,20 +281,20 @@
         <div class="form-grid">
           <div class="field">
             <label>Brand Code</label>
-            <input class="input mono" maxlength="3" placeholder="e.g. BRL" value="BRL">
+            <input class="input mono" maxlength="3" placeholder="e.g. MSL" value="MSL">
             <span class="hint">Exactly 3 uppercase letters.</span>
           </div>
           <div class="field">
             <label>Brand Name</label>
-            <input class="input" placeholder="Brand name" value="Browlash">
+            <input class="input" placeholder="Brand name" value="Marieskinlian">
           </div>
           <div class="field span-2">
             <label>Customer</label>
             <select class="input">
               <option>(no customer)</option>
-              <option selected>PT Browlash Indonesia (CUST-BRL)</option>
-              <option>PT Laverne Kosmetik (CUST-LVR)</option>
-              <option>PT Labose Beauty (CUST-LBS)</option>
+              <option selected>Marieskinlian (CUST-MSL)</option>
+              <option>LOVRA (CUST-LVR)</option>
+              <option>LASHBOSS (CUST-LBS)</option>
             </select>
             <span class="hint">Optional — a customer can own several brands.</span>
           </div>
@@ -319,10 +324,10 @@
         (or fix the proposal) to issue its 13-char code. Ids and downstream documents never change; the old code is kept as Legacy Code.</p>
 
         <div class="recode-row">
-          <div class="recode-head"><span class="mono">TO01MR03|100200100</span> <span class="muted">— Marieskin Toner Liquid 100 mL</span></div>
+          <div class="recode-head"><span class="mono">TO01MR03|100200100</span> <span class="muted">— Marieskinlian Glowing Skin Toner 100 ml</span></div>
           <div class="form-grid cols-3">
-            <div class="field"><label>Brand</label><select class="input mono"><option selected>MSL — Marieskin</option><option>BRL — Browlash</option></select></div>
-            <div class="field"><label>Formula</label><select class="input"><option selected>TO01MR03 — Marieskin Toner</option></select></div>
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>MSL — Marieskinlian</option><option>LVR — LOVRA</option></select></div>
+            <div class="field"><label>Formula</label><select class="input"><option selected>TO01MR03 — Marieskinlian Glowing Skin Toner</option></select></div>
             <div class="field"><label>FPS</label><select class="input"><option selected>100200100 · 100 mL</option></select></div>
             <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="1" style="width:80px"></div>
             <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="A" style="width:56px"></div>
@@ -332,25 +337,25 @@
         </div>
 
         <div class="recode-row">
-          <div class="recode-head"><span class="mono">LV02CR01|100200200</span> <span class="muted">— Laverne Cream Jar 50 mL</span></div>
+          <div class="recode-head"><span class="mono">FWS01BN01FWB|10020100</span> <span class="muted">— LOVRA Brightening Facial Wash 100ml</span></div>
           <div class="form-grid cols-3">
-            <div class="field"><label>Brand</label><select class="input mono"><option selected>LVR — Laverne</option></select></div>
-            <div class="field"><label>Formula</label><select class="input"><option selected>LV02CR01 — Laverne Cream</option></select></div>
-            <div class="field"><label>FPS</label><select class="input"><option selected>100200200 · 50 mL</option></select></div>
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>LVR — LOVRA</option></select></div>
+            <div class="field"><label>Formula</label><select class="input"><option selected>FWS01BN01FWB — LOVRA Brightening Facial Wash</option></select></div>
+            <div class="field"><label>FPS</label><select class="input"><option selected>10020100 · 100 mL</option></select></div>
             <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="1" style="width:80px"></div>
             <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="A" style="width:56px"></div>
-            <div class="field"><label>New code</label><div class="newcode" style="padding:8px 0">LVRFCR001A01</div></div>
+            <div class="field"><label>New code</label><div class="newcode" style="padding:8px 0">LVRCLLQ001A01</div></div>
           </div>
           <button class="btn btn-primary btn-sm" type="button">Confirm recode</button>
         </div>
 
         <div class="recode-row" style="opacity:.7">
-          <div class="recode-head"><span class="mono">LB01CL01|100200300</span> <span class="muted">— Labose Cleanser 100 mL</span>
+          <div class="recode-head"><span class="mono">DE01RN02DC|10020200</span> <span class="muted">— LOVRA Brightening Day Cream 30 g</span>
             <span class="tag" style="margin-left:6px">incomplete — pick formula</span></div>
           <div class="form-grid cols-3">
-            <div class="field"><label>Brand</label><select class="input mono"><option selected>LBS — Labose</option></select></div>
+            <div class="field"><label>Brand</label><select class="input mono"><option selected>LVR — LOVRA</option></select></div>
             <div class="field"><label>Formula</label><select class="input"><option selected>(formula)</option></select></div>
-            <div class="field"><label>FPS</label><select class="input"><option selected>100200300 · 100 mL</option></select></div>
+            <div class="field"><label>FPS</label><select class="input"><option selected>10020200 · 30 g</option></select></div>
             <div class="field"><label>Seq (override)</label><input class="input mono" type="number" value="0" style="width:80px"></div>
             <div class="field"><label>Size (override)</label><input class="input mono" maxlength="1" value="" style="width:56px"></div>
             <div class="field"><label>New code</label><div class="newcode faint" style="padding:8px 0">(incomplete)</div></div>
@@ -369,16 +374,16 @@
 
     <div class="dialog-row">
       <div class="modal">
-        <div class="modal-head"><h3>Formula revision — BRLEYCP012A01</h3><button class="modal-x" type="button">×</button></div>
+        <div class="modal-head"><h3>Formula revision — MSLSKLQ001A01</h3><button class="modal-x" type="button">×</button></div>
         <div class="modal-body">
           <p class="muted" style="font-size:12px;margin:0 0 14px">Keeps the same SKU code; swaps the formula link; clears NA
           (BPOM recertification). The new formula must have the same category + dosage form.</p>
           <div class="field">
             <label>New Formula</label>
-            <select class="input"><option>(select formula)</option><option selected>FFS-BRL-EY-013 — Browlash Eye Compact v2</option></select>
+            <select class="input"><option>(select formula)</option><option selected>TO02MR03 — Marieskinlian Glowing Skin Toner v2</option></select>
           </div>
           <div class="preview-box" style="margin-bottom:0">
-            <div><div class="pv-label">Code stays</div><div class="pv-kode" style="font-size:16px">BRLEYCP012A01</div></div>
+            <div><div class="pv-label">Code stays</div><div class="pv-kode" style="font-size:16px">MSLSKLQ001A01</div></div>
             <div><div class="pv-label">Status after</div><div style="margin-top:6px"><span class="pill pending">Pending BPOM</span></div></div>
           </div>
         </div>
@@ -386,16 +391,16 @@
       </div>
 
       <div class="modal">
-        <div class="modal-head"><h3>Packaging revision — BRLEYCP012A01</h3><button class="modal-x" type="button">×</button></div>
+        <div class="modal-head"><h3>Packaging revision — MSLSKLQ001A01</h3><button class="modal-x" type="button">×</button></div>
         <div class="modal-body">
           <p class="muted" style="font-size:12px;margin:0 0 14px">Creates a new SKU at the higher FPS revision (same netto); the
           old SKU is discontinued and NA cleared (BPOM recertification).</p>
           <div class="field">
             <label>New FPS (higher revision, same netto)</label>
-            <select class="input"><option>(select FPS)</option><option selected>100200102 · rev 2 · 5 mL</option></select>
+            <select class="input"><option>(select FPS)</option><option selected>100200101 · rev 2 · 100 mL</option></select>
           </div>
           <div class="preview-box" style="margin-bottom:0">
-            <div><div class="pv-label">New code</div><div class="pv-kode" style="font-size:16px">BRLEYCP012A02</div></div>
+            <div><div class="pv-label">New code</div><div class="pv-kode" style="font-size:16px">MSLSKLQ001A02</div></div>
             <div><div class="pv-label">Old SKU</div><div style="margin-top:6px"><span class="pill nonaktif">Non Aktif</span></div></div>
           </div>
         </div>
@@ -415,16 +420,19 @@
   var APP = { "Eye Makeup": "EY", "Face Makeup": "FC", "Skincare": "SK", "Cleansers & Makeup Removers": "CL" };
   var FORMS = { LQ: "Liquid", CR: "Cream", SS: "Semi-Solid", LP: "Loose Powder", CP: "Compact Powder", LS: "Lipstick", ST: "Stick" };
   var formulas = {
-    f1: { app: "EY", form: "CP", seq: 12, label: "Eye Makeup · Compact Powder" },
-    f2: { app: "FC", form: "CR", seq: 3,  label: "Face Makeup · Cream" },
-    f3: { app: "SK", form: "LQ", seq: 1,  label: "Skincare · Liquid" },
-    f4: { app: "CL", form: "LQ", seq: 1,  label: "Cleansers · Liquid" }
+    t1: { app: "SK", form: "LQ", seq: 1 },
+    t2: { app: "CL", form: "LQ", seq: 1 },
+    t3: { app: "SK", form: "CR", seq: 1 },
+    t4: { app: "LP", form: "LS", seq: 1 },
+    t5: { app: "FC", form: "CP", seq: 1 },
+    t6: { app: "SK", form: "LQ", seq: 1 }
   };
   var fps = {
-    p1: { size: "A", netto: 5,  rev: 1 },
-    p2: { size: "B", netto: 9,  rev: 1 },
-    p3: { size: "A", netto: 5,  rev: 2 },
-    p4: { size: "A", netto: 50, rev: 1 }
+    p1: { size: "A", netto: 100, rev: 1 },
+    p2: { size: "A", netto: 30,  rev: 1 },
+    p3: { size: "A", netto: 4,   rev: 1 },
+    p4: { size: "A", netto: 12,  rev: 1 },
+    p5: { size: "A", netto: 100, rev: 2 }
   };
   function pad(n, w) { n = String(n); while (n.length < w) n = "0" + n; return n; }
   var iBrand = document.getElementById("iBrand"),
